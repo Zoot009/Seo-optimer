@@ -1,21 +1,87 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
+import { loginUser, isAuthenticated as checkAuth } from "@/lib/auth-client";
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     rememberMe: false,
   });
+  const [showVerifiedMessage, setShowVerifiedMessage] = useState(false);
+  const [showResetMessage, setShowResetMessage] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    // Redirect if already logged in
+    if (checkAuth()) {
+      router.push("/");
+      return;
+    }
+
+    if (searchParams.get("verified") === "true") {
+      setShowVerifiedMessage(true);
+      // Hide the message after 5 seconds
+      setTimeout(() => setShowVerifiedMessage(false), 5000);
+    }
+    
+    if (searchParams.get("reset") === "success") {
+      setShowResetMessage(true);
+      // Hide the message after 5 seconds
+      setTimeout(() => setShowResetMessage(false), 5000);
+    }
+  }, [searchParams, router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Login submitted:", formData);
-    // TODO: Connect to backend API
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Save token and user data to localStorage
+        loginUser(result.token, result.user);
+        
+        // Redirect to dashboard/home page
+        router.push("/");
+      } else {
+        // Handle specific error cases
+        if (result.needsVerification) {
+          setError(result.message + " We'll redirect you to verify your email.");
+          setTimeout(() => {
+            router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+          }, 2000);
+        } else {
+          setError(result.message || "Login failed. Please try again.");
+        }
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("An error occurred during login. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -33,7 +99,30 @@ export default function LoginPage() {
         <div className="flex-1 flex items-center justify-center px-8 pb-8">
           <div className="w-full max-w-md">
             {/* Heading */}
-            <h1 className="text-3xl font-bold text-foreground mb-8">Login</h1>
+            <h1 className="text-3xl font-bold text-foreground mb-8 text-center">Login</h1>
+
+            {/* Email Verified Success Message */}
+            {showVerifiedMessage && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md mb-6">
+                <p className="font-semibold">Email Verified Successfully! ✓</p>
+                <p>You can now log in to your account.</p>
+              </div>
+            )}
+
+            {/* Password Reset Success Message */}
+            {showResetMessage && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md mb-6">
+                <p className="font-semibold">Password Reset Successfully! ✓</p>
+                <p>You can now log in with your new password.</p>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+                {error}
+              </div>
+            )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -89,9 +178,10 @@ export default function LoginPage() {
             {/* Submit Button */}
             <Button
               type="submit"
-              className="w-full h-12 bg-[#FDB022] hover:bg-[#F5A623] text-white font-semibold text-lg rounded-md mt-6"
+              disabled={loading}
+              className="w-full h-12 bg-[#FDB022] hover:bg-[#F5A623] text-white font-semibold text-lg rounded-md mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Login
+              {loading ? "Logging in..." : "Login"}
             </Button>
 
             {/* Sign Up Link */}
@@ -102,43 +192,6 @@ export default function LoginPage() {
               </Link>
             </div>
           </form>
-
-          {/* Divider */}
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">Or continue with</span>
-            </div>
-          </div>
-
-          {/* Social Login Buttons */}
-          <div className="grid grid-cols-2 gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-12 border-2 border-gray-300 hover:bg-gray-50"
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-                <path d="M19.6 10.227c0-.709-.064-1.39-.182-2.045H10v3.868h5.382a4.6 4.6 0 01-1.996 3.018v2.51h3.232c1.891-1.742 2.982-4.305 2.982-7.35z" fill="#4285F4"/>
-                <path d="M10 20c2.7 0 4.964-.895 6.618-2.423l-3.232-2.509c-.895.6-2.04.955-3.386.955-2.605 0-4.81-1.76-5.595-4.123H1.064v2.59A9.996 9.996 0 0010 20z" fill="#34A853"/>
-                <path d="M4.405 11.9c-.2-.6-.314-1.24-.314-1.9 0-.66.114-1.3.314-1.9V5.51H1.064A9.996 9.996 0 000 10c0 1.614.386 3.14 1.064 4.49l3.34-2.59z" fill="#FBBC05"/>
-                <path d="M10 3.977c1.468 0 2.786.505 3.823 1.496l2.868-2.868C14.959.99 12.695 0 10 0 6.09 0 2.71 2.24 1.064 5.51l3.34 2.59C5.19 5.736 7.395 3.977 10 3.977z" fill="#EA4335"/>
-              </svg>
-              Google
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-12 border-2 border-gray-300 hover:bg-gray-50"
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="mr-2">
-                <path d="M20 10c0-5.523-4.477-10-10-10S0 4.477 0 10c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V10h2.54V7.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V10h2.773l-.443 2.89h-2.33v6.988C16.343 19.128 20 14.991 20 10z" fill="#1877F2"/>
-              </svg>
-              Facebook
-            </Button>
-          </div>
         </div>
         </div>
       </div>
@@ -206,5 +259,13 @@ export default function LoginPage() {
         <div className="absolute bottom-10 left-10 w-48 h-48 bg-white/10 rounded-lg transform -rotate-12"></div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { isAuthenticated as checkAuth } from "@/lib/auth-client";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -19,6 +22,13 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (checkAuth()) {
+      router.push("/");
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +55,13 @@ export default function RegisterPage() {
       if (response.ok) {
         setSuccess(true);
         console.log("User registered successfully:", result.user);
-        // TODO: Redirect to login or dashboard
+        
+        // Redirect to email verification page
+        const email = encodeURIComponent(formData.email);
+        const token = encodeURIComponent(result.verificationToken);
+        setTimeout(() => {
+          router.push(`/verify-email?email=${email}&token=${token}`);
+        }, 1000);
       } else {
         setError(result.message || "Registration failed");
       }
@@ -155,7 +171,8 @@ export default function RegisterPage() {
             {/* Success Message */}
             {success && (
               <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
-                Registration successful! You can now log in.
+                <p className="font-semibold">Registration successful!</p>
+                <p>Please check your email for verification code. Redirecting...</p>
               </div>
             )}
 
@@ -171,7 +188,7 @@ export default function RegisterPage() {
                 className="mt-1 h-4 w-4 rounded border-gray-300"
               />
               <label htmlFor="subscribe" className="text-sm text-gray-600 leading-tight">
-                Subscribe me to the mailing list to receive SEOptimer news and announcements
+                Subscribe me to the mailing list to receive SEOmaster news and announcements
               </label>
             </div>
 

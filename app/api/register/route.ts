@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createUser } from '@/lib/user-service'
+import { generateAndSendOTP } from '@/lib/otp-service'
+import { createVerificationToken } from '@/lib/jwt-service'
 import { z } from 'zod'
 
 const registerSchema = z.object({
@@ -20,10 +22,17 @@ export async function POST(request: NextRequest) {
     // Create user with hashed password
     const user = await createUser(validatedData)
     
+    // Generate and send OTP for email verification
+    await generateAndSendOTP(user.email, user.firstName)
+    
+    // Create verification token for the session
+    const verificationToken = createVerificationToken(user.email)
+    
     return NextResponse.json({
       success: true,
-      message: 'User registered successfully',
-      user
+      message: 'User registered successfully. Please check your email for verification code.',
+      user,
+      verificationToken
     }, { status: 201 })
     
   } catch (error) {

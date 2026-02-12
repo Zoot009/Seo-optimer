@@ -4,9 +4,18 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { useRouter } from "next/navigation";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isAuthenticated, user, logout } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
 
   return (
     <header className="w-full bg-white">
@@ -35,26 +44,44 @@ export function Header() {
           {/* Actions */}
           <div className="flex items-center gap-6">
             <span className="hidden md:inline-flex text-base font-medium">US</span>
-            <Link href="/login">
-              <Button 
-                variant="ghost" 
-                className="hidden md:inline-flex text-lg font-medium hover:text-[#FDB022] gap-2 h-auto p-0"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="mt-0.5">
-                  <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M8 5V3M8 13V11M11 8H13M3 8H5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-                Login
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button 
-                variant="outline" 
-                className="hidden md:inline-flex border-2 border-foreground rounded-lg px-6 h-11 font-semibold hover:bg-[#FDB022] hover:text-white hover:border-[#FDB022] transition-all"
-              >
-                Premium - Free Trial
-              </Button>
-            </Link>
+            
+            {isAuthenticated ? (
+              <>
+                {/* Back to My Account Button */}
+                <Link href="/dashboard">
+                  <Button 
+                    variant="outline" 
+                    className="hidden md:inline-flex border-2 border-foreground rounded-lg px-6 h-11 font-semibold hover:bg-[#FDB022] hover:text-white hover:border-[#FDB022] transition-all"
+                  >
+                    Back to My Account
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button 
+                    variant="ghost" 
+                    className="hidden md:inline-flex text-lg font-medium hover:text-[#FDB022] gap-2 h-auto p-0"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="mt-0.5">
+                      <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5"/>
+                      <path d="M8 5V3M8 13V11M11 8H13M3 8H5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                    Login
+                  </Button>
+                </Link>
+                <Link href="/register">
+                  <Button 
+                    variant="outline" 
+                    className="hidden md:inline-flex border-2 border-foreground rounded-lg px-6 h-11 font-semibold hover:bg-[#FDB022] hover:text-white hover:border-[#FDB022] transition-all"
+                  >
+                    Premium - Free Trial
+                  </Button>
+                </Link>
+              </>
+            )}
+            
             <Button
               variant="ghost"
               size="icon"
@@ -83,16 +110,29 @@ export function Header() {
               Resources
             </button>
             <div className="pt-4 border-t space-y-3">
-              <Link href="/login" className="block">
-                <Button variant="ghost" className="w-full justify-start hover:text-[#FDB022]">
-                  Login
-                </Button>
-              </Link>
-              <Link href="/register" className="block">
-                <Button variant="outline" className="w-full border-2 border-foreground hover:bg-[#FDB022] hover:text-white hover:border-[#FDB022]">
-                  Premium - Free Trial
-                </Button>
-              </Link>
+              {isAuthenticated ? (
+                <Link href="/dashboard" className="block">
+                  <Button 
+                    variant="outline" 
+                    className="w-full border-2 border-foreground hover:bg-[#FDB022] hover:text-white hover:border-[#FDB022] font-semibold"
+                  >
+                    Back to My Account
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login" className="block">
+                    <Button variant="ghost" className="w-full justify-start hover:text-[#FDB022]">
+                      Login
+                    </Button>
+                  </Link>
+                  <Link href="/register" className="block">
+                    <Button variant="outline" className="w-full border-2 border-foreground hover:bg-[#FDB022] hover:text-white hover:border-[#FDB022]">
+                      Premium - Free Trial
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         )}

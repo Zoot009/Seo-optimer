@@ -14,8 +14,38 @@ model User {
   companyName String?
   email       String   @unique
   password    String   // This will store the hashed password
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  reports     Report[]
+
+  @@map("users")
+}
+
+model OTP {
+  id          String   @id @default(cuid())
+  email       String
+  code        String
+  type        String?  // "email_verification" or "password_reset"
+  expiresAt   DateTime
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("otps")
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  website     String
+  options     String   @default("Default")
+  status      String   @default("pending") // pending, processing, completed, failed
+  reportData  Json?
+  scheduled   DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@map("users")
+  @@map("reports")
+  @@index([userId])
 }
