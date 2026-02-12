@@ -87,18 +87,23 @@ export default function WhiteLabelReportsPage() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (!target.closest('.relative')) {
+      // Don't close if clicking on a dropdown or button
+      if (!target.closest('.relative') && !target.closest('button')) {
         setOpenDropdown(null);
       }
     };
 
     if (openDropdown) {
-      document.addEventListener('click', handleClickOutside);
-    }
+      // Use timeout to prevent immediate closing
+      const timeoutId = setTimeout(() => {
+        document.addEventListener('click', handleClickOutside);
+      }, 0);
 
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
+      return () => {
+        clearTimeout(timeoutId);
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
   }, [openDropdown]);
 
   const fetchReports = async () => {
@@ -165,10 +170,10 @@ export default function WhiteLabelReportsPage() {
     router.push(`/white-label-reports/${reportId}`);
   };
 
-  const handleDeleteReport = async (reportId: string) => {
+  const handleDeleteReport = (reportId: string) => {
+    setOpenDropdown(null);
     setReportToDelete(reportId);
     setDeleteDialogOpen(true);
-    setOpenDropdown(null);
   };
 
   const confirmDelete = async () => {
@@ -549,15 +554,21 @@ export default function WhiteLabelReportsPage() {
                                 size="sm"
                                 variant="outline"
                                 className="border-gray-300 text-gray-700 hover:bg-gray-50 h-8"
-                                onClick={() => setOpenDropdown(openDropdown === report.id ? null : report.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdown(openDropdown === report.id ? null : report.id);
+                                }}
                               >
                                 Options
                               </Button>
                               {openDropdown === report.id && (
-                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-[100] border border-gray-200">
                                   <div className="py-1">
                                     <button
-                                      onClick={() => handleDeleteReport(report.id)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteReport(report.id);
+                                      }}
                                       className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                                     >
                                       <Trash2 className="h-4 w-4" />
@@ -580,7 +591,7 @@ export default function WhiteLabelReportsPage() {
 
         {/* Delete Confirmation Dialog */}
         <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md z-50">
             <DialogHeader>
               <DialogTitle>Delete Report</DialogTitle>
               <DialogDescription>
@@ -590,7 +601,10 @@ export default function WhiteLabelReportsPage() {
             <DialogFooter className="gap-2 sm:gap-0">
               <Button
                 variant="outline"
-                onClick={() => setDeleteDialogOpen(false)}
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  setReportToDelete(null);
+                }}
               >
                 Cancel
               </Button>
