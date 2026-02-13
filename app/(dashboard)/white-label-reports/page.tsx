@@ -33,6 +33,7 @@ import {
   HelpCircle,
   ChevronUp,
   Trash2,
+  MoreVertical,
 } from "lucide-react";
 
 interface Report {
@@ -74,13 +75,6 @@ export default function WhiteLabelReportsPage() {
     setUser(userData);
     fetchReports();
     setLoading(false);
-
-    // Auto-refresh every 5 seconds to check for completed reports
-    const interval = setInterval(() => {
-      fetchReports();
-    }, 5000);
-
-    return () => clearInterval(interval);
   }, [router]);
 
   // Close dropdown when clicking outside
@@ -167,7 +161,7 @@ export default function WhiteLabelReportsPage() {
   };
 
   const handleViewReport = (reportId: string) => {
-    router.push(`/white-label-reports/${reportId}`);
+    window.open(`/white-label-reports/${reportId}`, '_blank');
   };
 
   const handleDeleteReport = (reportId: string) => {
@@ -515,10 +509,10 @@ export default function WhiteLabelReportsPage() {
                       Website
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Options
+                      Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Scheduled
+                      Created
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -545,32 +539,31 @@ export default function WhiteLabelReportsPage() {
                           {filteredReports.length - index}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <button
-                            onClick={() => handleViewReport(report.id)}
-                            className="text-blue-600 hover:text-blue-800 hover:underline"
+                          <a
+                            href={`/white-label-reports/${report.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
                           >
                             {report.website}
-                          </button>
+                          </a>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span
-                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                              report.status === "completed"
-                                ? "bg-green-100 text-green-800"
-                                : report.status === "processing"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : report.status === "failed"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {report.options}
-                          </span>
+                          {report.status === "completed" && (
+                            <span className="text-green-600 font-medium">Completed</span>
+                          )}
+                          {report.status === "failed" && (
+                            <span className="text-red-600 font-medium">Failed</span>
+                          )}
+                          {report.status === "processing" && (
+                            <span className="text-yellow-600 font-medium">Processing...</span>
+                          )}
+                          {report.status === "pending" && (
+                            <span className="text-gray-500">-</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {report.scheduled
-                            ? new Date(report.scheduled).toLocaleDateString()
-                            : "-"}
+                          {new Date(report.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <div className="flex items-center gap-2">
@@ -579,19 +572,19 @@ export default function WhiteLabelReportsPage() {
                               onClick={() => handleViewReport(report.id)}
                               className="bg-blue-500 hover:bg-blue-600 text-white h-8"
                             >
-                              PDF
+                              {report.status === "pending" ? "Analyze" : "View Report"}
                             </Button>
                             <div className="relative">
                               <Button
                                 size="sm"
-                                variant="outline"
-                                className="border-gray-300 text-gray-700 hover:bg-gray-50 h-8"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenDropdown(openDropdown === report.id ? null : report.id);
                                 }}
                               >
-                                Options
+                                <MoreVertical className="h-4 w-4" />
                               </Button>
                               {openDropdown === report.id && (
                                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-100` border border-gray-200">

@@ -111,8 +111,9 @@ export default function ReportViewPage() {
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<ReportData | null>(null);
   const [reportMetadata, setReportMetadata] = useState<{ createdAt: string } | null>(null);
-  const [loadingMessage, setLoadingMessage] = useState("Loading report...");
+  const [loadingMessage, setLoadingMessage] = useState("Starting analysis...");
   const [error, setError] = useState<string | null>(null);
+  const [pollCount, setPollCount] = useState(0);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -120,14 +121,21 @@ export default function ReportViewPage() {
       return;
     }
 
-    fetchReport();
+    // Always trigger reanalysis when viewing a report
+    fetchReport(true);
   }, [params.id]);
 
-  const fetchReport = async () => {
+  const fetchReport = async (reanalyze = false) => {
     try {
-      setLoadingMessage("Fetching report data...");
+      setLoadingMessage(reanalyze ? "Starting SEO analysis..." : "Fetching report data...");
       const token = localStorage.getItem("seomaster_auth_token");
-      const response = await fetch(`/api/reports/${params.id}`, {
+      
+      // Add reanalyze query param to always fetch fresh data
+      const url = reanalyze 
+        ? `/api/reports/${params.id}?reanalyze=true`
+        : `/api/reports/${params.id}`;
+      
+      const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -135,32 +143,35 @@ export default function ReportViewPage() {
 
       if (response.ok) {
         const data = await response.json();
+        
         if (data.report.status === "completed" && data.report.reportData) {
           setLoadingMessage("Loading report details...");
           setReport(data.report.reportData);
           setReportMetadata({ createdAt: data.report.createdAt });
+          setLoading(false);
         } else if (data.report.status === "processing") {
-          setLoadingMessage("Report is being generated. This may take a few moments...");
-          toast.info("Report is still being generated. Please wait...");
-          setTimeout(fetchReport, 5000); // Retry after 5 seconds
-          return;
+          setLoadingMessage("Analyzing website... This may take 30-60 seconds.");
+          setPollCount((prev) => prev + 1);
+          // Poll every 3 seconds while processing
+          setTimeout(() => fetchReport(false), 3000);
+        } else if (data.report.status === "pending") {
+          setLoadingMessage("Initializing analysis...");
+          // If still pending, check again shortly
+          setTimeout(() => fetchReport(false), 2000);
         } else if (data.report.status === "failed") {
           setError("Report generation failed");
           toast.error("Report generation failed.");
-          setTimeout(() => router.push("/white-label-reports"), 2000);
-          return;
+          setLoading(false);
         }
       } else {
         setError("Failed to load report");
         toast.error("Failed to load report");
-        setTimeout(() => router.push("/white-label-reports"), 2000);
+        setLoading(false);
       }
     } catch (error) {
       console.error("Error fetching report:", error);
       setError("An error occurred while loading the report");
       toast.error("Failed to load report");
-      setTimeout(() => router.push("/white-label-reports"), 2000);
-    } finally {
       setLoading(false);
     }
   };
@@ -178,52 +189,51 @@ export default function ReportViewPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-100">
         <div className="text-center max-w-md mx-auto px-6">
-          {/* Animated Logo/Icon */}
-          <div className="relative mb-8">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-24 h-24 bg-blue-100 rounded-full animate-ping opacity-20"></div>
-            </div>
-            <div className="relative flex items-center justify-center">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
-                <svg 
-                  className="w-10 h-10 text-white animate-pulse" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
-                  />
-                </svg>
-              </div>
-            </div>
-          </div>
-          
           {/* Loading Spinner */}
           <div className="mb-6">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500"></div>
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-blue-500 border-r-blue-400"></div>
           </div>
           
           {/* Loading Text */}
           <h2 className="text-2xl font-bold text-gray-900 mb-3">
-            {error ? "Error" : "Loading Report"}
+            {error ? "Error" : "Analyzing Website"}
           </h2>
-          <p className="text-gray-600 mb-6 text-lg">
+          <p className="text-gray-600 mb-4 text-lg">
             {error || loadingMessage}
           </p>
           
+          {/* Progress indicator */}
+          {!error && pollCount > 0 && (
+            <div className="mb-6">
+              <p className="text-sm text-gray-500 mb-2">
+                Checking progress... ({pollCount * 3}s elapsed)
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${Math.min((pollCount * 10), 90)}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
+          
           {/* Progress Dots */}
           {!error && (
-            <div className="flex justify-center gap-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            <div className="flex justify-center gap-2 mb-6">
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
             </div>
+          )}
+          
+          {/* Info text */}
+          {!error && (
+            <p className="text-sm text-gray-500">
+              We're analyzing the website's SEO metrics, structure, and performance. 
+              This typically takes 30-60 seconds.
+            </p>
           )}
           
           {/* Back Button for Error State */}
@@ -426,7 +436,15 @@ export default function ReportViewPage() {
         {/* Introduction */}
         <div className="bg-white rounded-lg p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Website Report for {getHostname(safeReport.url)}
+            Website Report for{" "}
+            <a
+              href={safeReport.url.startsWith('http') ? safeReport.url : `https://${safeReport.url}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              {getHostname(safeReport.url)}
+            </a>
           </h1>
           <p className="text-gray-600 text-sm leading-relaxed">
             This report grades your website on the strength of a range of
@@ -442,7 +460,15 @@ export default function ReportViewPage() {
         {/* Audit Results */}
         <div className="bg-white rounded-lg p-8 mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-8">
-            Audit Results for {getHostname(safeReport.url)}
+            Audit Results for{" "}
+            <a
+              href={safeReport.url.startsWith('http') ? safeReport.url : `https://${safeReport.url}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              {getHostname(safeReport.url)}
+            </a>
           </h2>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -619,6 +645,32 @@ export default function ReportViewPage() {
         {/* Add extra spacing for overlapping mobile view */}
         <div className="mb-12"></div>
 
+        {/* Recommendations Section */}
+        {safeReport.recommendations.length > 0 && (
+          <div id="recommendations-section" className="bg-white rounded-lg p-8 mt-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
+              Recommendations
+            </h2>
+            <div className="space-y-1">
+              {safeReport.recommendations.map((rec, index) => (
+                <div key={index} className="flex items-center justify-between py-4 border-b border-gray-100 last:border-b-0">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">{rec.title}</h4>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm">
+                      {rec.category}
+                    </span>
+                    <span className="text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm font-medium">
+                      {rec.priority}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* On-Page SEO Results Section */}
         <div className="bg-white rounded-lg p-8 mt-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
@@ -627,7 +679,7 @@ export default function ReportViewPage() {
 
           {/* Score and Message */}
           <div className="flex items-start gap-8 mb-8">
-            <div className="relative w-40 h-40 flex-shrink-0">
+            <div className="relative w-40 h-40 shrink-0">
               <svg className="w-full h-full transform -rotate-90">
                 <circle
                   cx="80"
@@ -937,7 +989,7 @@ export default function ReportViewPage() {
 
           {/* Score and Message */}
           <div className="flex items-start gap-8 mb-8">
-            <div className="relative w-40 h-40 flex-shrink-0">
+            <div className="relative w-40 h-40 shrink-0">
               <svg className="w-full h-full transform -rotate-90">
                 <circle
                   cx="80"
@@ -1044,32 +1096,6 @@ export default function ReportViewPage() {
             </div>
           </div>
         </div>
-
-        {/* Recommendations Section */}
-        {safeReport.recommendations.length > 0 && (
-          <div id="recommendations-section" className="bg-white rounded-lg p-8 mt-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              Recommendations
-            </h2>
-            <div className="space-y-1">
-              {safeReport.recommendations.map((rec, index) => (
-                <div key={index} className="flex items-center justify-between py-4 border-b border-gray-100 last:border-b-0">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{rec.title}</h4>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm">
-                      {rec.category}
-                    </span>
-                    <span className="text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm font-medium">
-                      {rec.priority}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

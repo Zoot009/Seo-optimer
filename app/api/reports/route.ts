@@ -90,66 +90,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create the report with completed status
+    // Create the report with pending status - analysis will start when user views it
     const report = await prisma.report.create({
       data: {
         userId: payload.userId,
         website: website,
         options: options,
-        status: "completed",
+        status: "pending",
       },
     });
 
-    console.log(`[REPORT ${report.id}] Starting SEO analysis for: ${website}`);
-
-    // Start background analysis by calling VPS backend
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
-    const backendApiKey = process.env.BACKEND_API_KEY;
-
-    fetch(`${backendUrl}/api/analyze`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": backendApiKey || "",
-      },
-      body: JSON.stringify({
-        url: website,
-        reportId: report.id,
-      }),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`Backend returned status ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(async (result) => {
-        console.log(`[REPORT ${report.id}] Analysis completed successfully`);
-        // Update report with analysis results
-        await prisma.report.update({
-          where: { id: report.id },
-          data: {
-            status: "completed",
-            reportData: result.data as any,
-          },
-        });
-        console.log(`[REPORT ${report.id}] Report updated to completed status`);
-      })
-      .catch(async (error) => {
-        console.error(`[REPORT ${report.id}] Analysis failed:`, error);
-        console.error(`[REPORT ${report.id}] Error message:`, error.message);
-        // Mark as failed
-        await prisma.report.update({
-          where: { id: report.id },
-          data: {
-            status: "failed",
-            reportData: {
-              error: error.message,
-            },
-          },
-        });
-        console.log(`[REPORT ${report.id}] Report marked as failed`);
-      });
+    console.log(`[REPORT ${report.id}] Report created - analysis will start on first view`);
 
     return NextResponse.json(
       { message: "Report created successfully", report },

@@ -2,6 +2,59 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/jwt-service";
 import prisma from "@/lib/prisma";
 
+// Function to trigger SEO analysis
+async function triggerAnalysis(reportId: string, website: string) {
+  const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
+  const backendApiKey = process.env.BACKEND_API_KEY;
+
+  console.log(`[REPORT ${reportId}] Starting SEO analysis for: ${website}`);
+
+  fetch(`${backendUrl}/api/analyze`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": backendApiKey || "",
+    },
+    body: JSON.stringify({
+      url: website,
+      reportId: reportId,
+    }),
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Backend returned status ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(async (result) => {
+      console.log(`[REPORT ${reportId}] Analysis completed successfully`);
+      // Update report with analysis results
+      await prisma.report.update({
+        where: { id: reportId },
+        data: {
+          status: "completed",
+          reportData: result.data as any,
+        },
+      });
+      console.log(`[REPORT ${reportId}] Report updated to completed status`);
+    })
+    .catch(async (error) => {
+      console.error(`[REPORT ${reportId}] Analysis failed:`, error);
+      console.error(`[REPORT ${reportId}] Error message:`, error.message);
+      // Mark as failed
+      await prisma.report.update({
+        where: { id: reportId },
+        data: {
+          status: "failed",
+          reportData: {
+            error: error.message,
+          },
+        },
+      });
+      console.log(`[REPORT ${reportId}] Report marked as failed`);
+    });
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -9,6 +62,10 @@ export async function GET(
   try {
     // Await params
     const { id } = await params;
+
+    // Get query parameters
+    const url = new URL(request.url);
+    const reanalyze = url.searchParams.get("reanalyze") === "true";
 
     // Get token from Authorization header
     const authHeader = request.headers.get("authorization");
@@ -33,7 +90,7 @@ export async function GET(
     }
 
     // Fetch the report
-    const report = await prisma.report.findFirst({
+    let report = await prisma.report.findFirst({
       where: {
         id,
         userId: payload.userId,
@@ -45,6 +102,18 @@ export async function GET(
         { error: "Report not found or access denied" },
         { status: 404 }
       );
+    }
+
+    // If report is pending or reanalyze is requested, trigger analysis
+    if (report.status === "pending" || reanalyze) {
+      // Update status to processing
+      report = await prisma.report.update({
+        where: { id },
+        data: { status: "processing" },
+      });
+
+      // Trigger analysis in background
+      triggerAnalysis(report.id, report.website);
     }
 
     return NextResponse.json({ report });
