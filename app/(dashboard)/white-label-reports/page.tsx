@@ -208,7 +208,7 @@ export default function WhiteLabelReportsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-100">
         <div className="text-center max-w-md mx-auto px-6">
           {/* Animated Logo/Icon */}
           <div className="relative mb-8">
@@ -216,7 +216,7 @@ export default function WhiteLabelReportsPage() {
               <div className="w-24 h-24 bg-blue-100 rounded-full animate-ping opacity-20"></div>
             </div>
             <div className="relative flex items-center justify-center">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+              <div className="w-20 h-20 bg-linear-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
                 <FileCheck className="w-10 h-10 text-white animate-pulse" />
               </div>
             </div>
@@ -594,7 +594,7 @@ export default function WhiteLabelReportsPage() {
                                 Options
                               </Button>
                               {openDropdown === report.id && (
-                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-[100] border border-gray-200">
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-100` border border-gray-200">
                                   <div className="py-1">
                                     <button
                                       onClick={(e) => {

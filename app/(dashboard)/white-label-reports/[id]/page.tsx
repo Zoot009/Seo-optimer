@@ -71,6 +71,9 @@ interface ReportData {
     schemaTypes: string[];
     hasIdentitySchema: boolean;
     identityType?: string;
+    renderingPercentage?: number;
+    hasMicrodata?: boolean;
+    hasRDFa?: boolean;
   };
   onPageSEO: {
     score: number;
@@ -324,6 +327,9 @@ export default function ReportViewPage() {
       hasSchema: false,
       schemaTypes: [],
       hasIdentitySchema: false,
+      renderingPercentage: 0,
+      hasMicrodata: false,
+      hasRDFa: false,
     },
     onPageSEO: report.onPageSEO || {
       score: 0,
@@ -845,11 +851,34 @@ export default function ReportViewPage() {
                 <h4 className="font-semibold text-gray-900 text-lg">Schema.org Structured Data</h4>
                 <span className={`text-3xl font-bold ${safeReport.technicalSEO.hasSchema ? "text-green-500" : "text-red-500"}`}>{safeReport.technicalSEO.hasSchema ? "✓" : "✗"}</span>
               </div>
-              <p className="text-gray-600">
+              <p className="text-gray-600 mb-2">
                 {safeReport.technicalSEO.hasSchema 
-                  ? "You are using JSON-LD Schema on your page." 
+                  ? "Your page is using Schema.org structured data." 
                   : "Your page is not using Schema.org structured data."}
               </p>
+              {safeReport.technicalSEO.hasSchema && safeReport.technicalSEO.schemaTypes.length > 0 && (
+                <div className="bg-gray-50 p-3 rounded">
+                  <p className="text-gray-700 font-medium mb-1">Schema Types Found:</p>
+                  <ul className="list-disc list-inside text-gray-600">
+                    {safeReport.technicalSEO.schemaTypes.map((type, idx) => (
+                      <li key={idx}>{type}</li>
+                    ))}
+                  </ul>
+                  {(safeReport.technicalSEO.hasMicrodata || safeReport.technicalSEO.hasRDFa) && (
+                    <p className="text-gray-500 text-sm mt-2">
+                      Additional formats: {[
+                        safeReport.technicalSEO.hasMicrodata && "Microdata",
+                        safeReport.technicalSEO.hasRDFa && "RDFa"
+                      ].filter(Boolean).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+              {!safeReport.technicalSEO.hasSchema && (
+                <p className="text-gray-600 text-sm mt-2">
+                  Schema.org structured data helps search engines understand your content better and can lead to rich search results.
+                </p>
+              )}
             </div>
 
             {/* Identity Schema */}
@@ -865,8 +894,13 @@ export default function ReportViewPage() {
               </p>
               {safeReport.technicalSEO.identityType && (
                 <div className="bg-gray-50 p-3 rounded">
-                  <p className="text-gray-700">{safeReport.technicalSEO.identityType}</p>
+                  <p className="text-gray-700">Schema Type: <span className="font-medium">{safeReport.technicalSEO.identityType}</span></p>
                 </div>
+              )}
+              {!safeReport.technicalSEO.hasIdentitySchema && (
+                <p className="text-gray-600 text-sm mt-2">
+                  Adding Organization or Person schema helps search engines understand your brand identity and can improve your knowledge panel results.
+                </p>
               )}
             </div>
 
@@ -874,13 +908,22 @@ export default function ReportViewPage() {
             <div className="pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Rendered Content (LLM Readability)</h4>
-                <span className="text-3xl font-bold text-green-500">✓</span>
+                <span className={`text-3xl font-bold ${(safeReport.technicalSEO.renderingPercentage || 0) < 30 ? "text-green-500" : "text-orange-500"}`}>
+                  {(safeReport.technicalSEO.renderingPercentage || 0) < 30 ? "✓" : "⚠"}
+                </span>
               </div>
               <p className="text-gray-600 mb-2">
-                Your page has a low level of rendered content which tends to make it more readable for LLMs.
+                {(safeReport.technicalSEO.renderingPercentage || 0) < 30 
+                  ? "Your page has a low level of rendered content which tends to make it more readable for LLMs."
+                  : "Your page has a high percentage of markup relative to content. Consider optimizing your HTML structure."}
               </p>
               <div className="bg-gray-50 p-3 rounded">
-                <p className="text-gray-700">Rendering Percentage: 13%</p>
+                <p className="text-gray-700">
+                  <span className="font-medium">Rendering Percentage:</span> {safeReport.technicalSEO.renderingPercentage || 0}%
+                </p>
+                <p className="text-gray-500 text-sm mt-1">
+                  This metric compares visible text content to total HTML size. Lower percentages indicate cleaner markup.
+                </p>
               </div>
             </div>
           </div>
