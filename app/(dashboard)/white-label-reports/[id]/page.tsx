@@ -507,9 +507,6 @@ export default function ReportViewPage() {
                     >
                       {safeReport.score}
                     </div>
-                    <div className="text-gray-500 text-sm mt-1">
-                      Grade: {safeReport.grade}
-                    </div>
                   </div>
                 </div>
               </div>
