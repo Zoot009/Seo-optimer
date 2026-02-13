@@ -100,6 +100,10 @@ interface ReportData {
   };
   localSEO: {
     hasLocalBusinessSchema: boolean;
+    hasPhone?: boolean;
+    phoneNumber?: string;
+    hasAddress?: boolean;
+    addressText?: string;
   };
   recommendations: Array<{
     title: string;
@@ -768,10 +772,19 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">H1 Header Tag Usage</h4>
-                <span className={`text-3xl font-bold ${safeReport.headings.hasH1 ? "text-green-500" : "text-red-500"}`}>{safeReport.headings.hasH1 ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${safeReport.headings.h1Count === 1 ? "text-green-500" : "text-red-500"}`}>
+                  {safeReport.headings.h1Count === 1 ? "✓" : "✗"}
+                </span>
               </div>
-              <p className="text-gray-600">
-                {safeReport.headings.hasH1 ? "Your page has a H1 Tag." : "Your page is missing an H1 Tag."}
+              <p className="text-gray-600 mb-2">
+                {safeReport.headings.h1Count === 0
+                  ? "Your page is missing an H1 Tag."
+                  : safeReport.headings.h1Count === 1
+                  ? "Your page has a H1 Tag."
+                  : "Your page has more than one H1 Tag. It is generally recommended to only use one H1 Tag on a page."}
+              </p>
+              <p className="text-gray-500 text-sm">
+                The H1 Header Tag is an important way of signaling to search engines what your content is about, and subsequently the keywords it should rank for.
               </p>
             </div>
 
@@ -960,24 +973,6 @@ export default function ReportViewPage() {
               )}
             </div>
 
-            {/* Local Business Schema */}
-            <div className="border-b border-gray-200 pb-6">
-              <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold text-gray-900 text-lg">Local Business Schema</h4>
-                <span className={`text-3xl font-bold ${safeReport.technicalSEO.hasLocalBusinessSchema ? "text-green-500" : "text-red-500"}`}>{safeReport.technicalSEO.hasLocalBusinessSchema ? "✓" : "✗"}</span>
-              </div>
-              <p className="text-gray-600 mb-2">
-                {safeReport.technicalSEO.hasLocalBusinessSchema 
-                  ? "LocalBusiness Schema identified on the page." 
-                  : "No LocalBusiness Schema found on the page."}
-              </p>
-              {!safeReport.technicalSEO.hasLocalBusinessSchema && (
-                <p className="text-gray-600 text-sm mt-2">
-                  Adding LocalBusiness schema helps search engines display your business information in local search results, including address, hours, and contact details.
-                </p>
-              )}
-            </div>
-
             {/* Rendered Content */}
             <div className="pb-6">
               <div className="flex items-start justify-between mb-2">
@@ -1102,14 +1097,49 @@ export default function ReportViewPage() {
 
           {/* Local SEO Checks */}
           <div className="space-y-4">
+            {/* Address & Phone Shown on Website */}
+            <div className="flex items-start justify-between py-4 border-b border-gray-200">
+              <div className="flex-1">
+                <h4 className="font-semibold text-gray-900 mb-1">Address &amp; Phone Shown on Website</h4>
+                <p className="text-gray-600 text-sm mb-3">
+                  {(safeReport.localSEO.hasPhone && safeReport.localSEO.hasAddress)
+                    ? "Address and Phone Number visible on the page."
+                    : safeReport.localSEO.hasPhone
+                    ? "Phone Number visible on the page, but Address not found."
+                    : safeReport.localSEO.hasAddress
+                    ? "Address visible on the page, but Phone Number not found."
+                    : "Address and Phone Number not visible on the page."}
+                </p>
+                {(safeReport.localSEO.hasPhone || safeReport.localSEO.hasAddress) && (
+                  <div className="space-y-2 text-sm">
+                    {safeReport.localSEO.hasPhone && safeReport.localSEO.phoneNumber && (
+                      <div className="flex gap-2">
+                        <span className="text-gray-500 font-medium">Phone</span>
+                        <span className="text-gray-700">{safeReport.localSEO.phoneNumber}</span>
+                      </div>
+                    )}
+                    {safeReport.localSEO.hasAddress && safeReport.localSEO.addressText && (
+                      <div className="flex gap-2">
+                        <span className="text-gray-500 font-medium">Address</span>
+                        <span className="text-gray-700">{safeReport.localSEO.addressText}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <span className={`text-3xl font-bold ${(safeReport.localSEO.hasPhone && safeReport.localSEO.hasAddress) ? "text-green-500" : "text-red-500"}`}>
+                {(safeReport.localSEO.hasPhone && safeReport.localSEO.hasAddress) ? "✓" : "✗"}
+              </span>
+            </div>
+
             {/* Local Business Schema */}
             <div className="flex items-start justify-between py-4">
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 mb-1">Local Business Schema</h4>
                 <p className="text-gray-600 text-sm">
                   {safeReport.localSEO.hasLocalBusinessSchema 
-                    ? "LocalBusiness schema markup detected on your page." 
-                    : "No LocalBusiness schema markup detected on your page."}
+                    ? "Local Business Schema identified on the page." 
+                    : "No Local Business Schema identified on the page."}
                 </p>
               </div>
               <span className={`text-3xl font-bold ${safeReport.localSEO.hasLocalBusinessSchema ? "text-green-500" : "text-red-500"}`}>
