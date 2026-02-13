@@ -18,11 +18,10 @@ export async function POST(request: NextRequest) {
     // Check if user exists with this email
     const user = await findUserByEmail(email)
     if (!user) {
-      // Don't reveal if user exists or not for security
       return NextResponse.json({
-        success: true,
-        message: 'If an account with this email exists, you will receive a password reset code.'
-      }, { status: 200 })
+        success: false,
+        message: 'No account found with this email address.'
+      }, { status: 404 })
     }
     
     // Check if user is verified (can only reset password if account is verified)

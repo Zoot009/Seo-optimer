@@ -33,7 +33,6 @@ import {
   HelpCircle,
   ChevronUp,
   Trash2,
-  MoreVertical,
 } from "lucide-react";
 
 interface Report {
@@ -55,7 +54,6 @@ export default function WhiteLabelReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [creating, setCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
 
@@ -76,29 +74,6 @@ export default function WhiteLabelReportsPage() {
     fetchReports();
     setLoading(false);
   }, [router]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      // Don't close if clicking on a dropdown or button
-      if (!target.closest('.relative') && !target.closest('button')) {
-        setOpenDropdown(null);
-      }
-    };
-
-    if (openDropdown) {
-      // Use timeout to prevent immediate closing
-      const timeoutId = setTimeout(() => {
-        document.addEventListener('click', handleClickOutside);
-      }, 0);
-
-      return () => {
-        clearTimeout(timeoutId);
-        document.removeEventListener('click', handleClickOutside);
-      };
-    }
-  }, [openDropdown]);
 
   const fetchReports = async () => {
     try {
@@ -165,7 +140,6 @@ export default function WhiteLabelReportsPage() {
   };
 
   const handleDeleteReport = (reportId: string) => {
-    setOpenDropdown(null);
     setReportToDelete(reportId);
     setDeleteDialogOpen(true);
   };
@@ -574,35 +548,17 @@ export default function WhiteLabelReportsPage() {
                             >
                               {report.status === "pending" ? "Analyze" : "View Report"}
                             </Button>
-                            <div className="relative">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 w-8 p-0 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenDropdown(openDropdown === report.id ? null : report.id);
-                                }}
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                              {openDropdown === report.id && (
-                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-100` border border-gray-200">
-                                  <div className="py-1">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteReport(report.id);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                      Delete Report
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteReport(report.id);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </td>
                       </tr>

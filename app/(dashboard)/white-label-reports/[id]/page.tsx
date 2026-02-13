@@ -18,6 +18,7 @@ interface ReportData {
   score: number;
   grade: string;
   screenshot?: string;
+  screenshotMobile?: string;
   title: string;
   description: string;
   metaTags: {
@@ -623,15 +624,17 @@ export default function ReportViewPage() {
                     />
                   </div>
                   {/* Mobile View - Overlapping */}
-                  <div className="absolute -bottom-8 -right-4 w-48 border-4 border-gray-200 rounded-xl overflow-hidden shadow-2xl bg-white z-10">
-                    <div className="bg-white p-1">
-                      <img
-                        src={safeReport.screenshot}
-                        alt={`Mobile screenshot of ${safeReport.url}`}
-                        className="w-full h-auto"
-                      />
+                  {safeReport.screenshotMobile && (
+                    <div className="absolute -bottom-8 -right-4 w-48 border-4 border-gray-200 rounded-xl overflow-hidden shadow-2xl bg-white z-10">
+                      <div className="bg-white p-1">
+                        <img
+                          src={safeReport.screenshotMobile}
+                          alt={`Mobile screenshot of ${safeReport.url}`}
+                          className="w-full h-auto"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ) : (
                 <div className="w-full max-w-md h-64 bg-gray-100 rounded-lg flex items-center justify-center">
