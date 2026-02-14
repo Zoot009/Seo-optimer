@@ -432,15 +432,33 @@ export default function OtherToolsPage() {
                   {/* Details Section */}
                   {showDetails && results.statistics.imagesWithoutAlt > 0 && (
                     <div className="mt-6 space-y-4">
-                      <h3 className="font-bold text-gray-900 text-lg">Images Missing Alt Attributes:</h3>
-                      <div className="space-y-3">
-                        {results.images.withoutAlt.map((image: any, index: number) => (
-                          <div key={index} className="p-4 bg-white rounded-md border border-gray-200">
-                            <p className="text-sm text-gray-600 break-all">
-                              <strong>Image {index + 1}:</strong> {image.src}
-                            </p>
-                          </div>
-                        ))}
+                      <h3 className="font-bold text-gray-900 text-lg mb-3">Images Missing Alt Attributes:</h3>
+                      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table className="w-full bg-white">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">#</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Image Link</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {results.images.withoutAlt.map((image: any, index: number) => (
+                              <tr key={index} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 text-sm text-gray-900 font-medium">{index + 1}</td>
+                                <td className="px-6 py-4 text-sm">
+                                  <a 
+                                    href={image.src.startsWith('http') ? image.src : `https://${new URL(results.url).hostname}${image.src.startsWith('/') ? '' : '/'}${image.src}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 hover:underline break-all"
+                                  >
+                                    {image.src}
+                                  </a>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
