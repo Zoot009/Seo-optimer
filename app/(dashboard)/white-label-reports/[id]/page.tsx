@@ -116,13 +116,9 @@ interface ReportData {
 export default function ReportViewPage() {
   const router = useRouter();
   const params = useParams();
-  const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<ReportData | null>(null);
   const [reportMetadata, setReportMetadata] = useState<{ createdAt: string } | null>(null);
-  const [loadingMessage, setLoadingMessage] = useState("Starting analysis...");
   const [error, setError] = useState<string | null>(null);
-  const [pollCount, setPollCount] = useState(0);
-  const [websiteName, setWebsiteName] = useState<string>("");
   const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -137,7 +133,6 @@ export default function ReportViewPage() {
 
   const fetchReport = async (reanalyze = false) => {
     try {
-      setLoadingMessage(reanalyze ? "Starting SEO analysis..." : "Fetching report data...");
       const token = localStorage.getItem("seomaster_auth_token");
       
       // Add reanalyze query param to always fetch fresh data
@@ -154,40 +149,25 @@ export default function ReportViewPage() {
       if (response.ok) {
         const data = await response.json();
         
-        // Store website name for display during loading
-        if (data.report.website && !websiteName) {
-          setWebsiteName(data.report.website);
-        }
-        
         if (data.report.status === "completed" && data.report.reportData) {
-          setLoadingMessage("Report ready!");
+          // Report is ready - display it immediately
           setReport(data.report.reportData);
           setReportMetadata({ createdAt: data.report.createdAt });
-          setLoading(false);
-        } else if (data.report.status === "processing") {
-          setLoadingMessage("Analyzing SEO metrics, performance & structure...");
-          setPollCount((prev) => prev + 1);
-          // Poll every 1.5 seconds for faster updates
-          setTimeout(() => fetchReport(false), 1500);
-        } else if (data.report.status === "pending") {
-          setLoadingMessage("Starting analysis...");
-          // If still pending, check again shortly
-          setTimeout(() => fetchReport(false), 1500);
+        } else if (data.report.status === "processing" || data.report.status === "pending") {
+          // Silent polling - check again in 1 second
+          setTimeout(() => fetchReport(false), 1000);
         } else if (data.report.status === "failed") {
           setError("Report generation failed");
           toast.error("Report generation failed.");
-          setLoading(false);
         }
       } else {
         setError("Failed to load report");
         toast.error("Failed to load report");
-        setLoading(false);
       }
     } catch (error) {
       console.error("Error fetching report:", error);
       setError("An error occurred while loading the report");
       toast.error("Failed to load report");
-      setLoading(false);
     }
   };
 
@@ -202,84 +182,16 @@ export default function ReportViewPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-100">
-        <div className="text-center max-w-lg mx-auto px-6">
-          {/* Loading Spinner */}
-          <div className="mb-8">
-            <div className="inline-block animate-spin rounded-full h-20 w-20 border-4 border-gray-200 border-t-blue-500"></div>
-          </div>
-          
-          {/* Website Name */}
-          {websiteName && !error && (
-            <div className="mb-4">
-              <p className="text-sm text-gray-500 uppercase tracking-wide mb-2">Analyzing</p>
-              <h3 className="text-xl font-semibold text-gray-900">{websiteName}</h3>
-            </div>
-          )}
-          
-          {/* Loading Text */}
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">
-            {error ? "Error" : "SEO Analysis in Progress"}
-          </h2>
-          <p className="text-gray-600 mb-6">
-            {error || loadingMessage}
-          </p>
-          
-          {/* Simplified Progress indicator */}
-          {!error && pollCount > 0 && (
-            <div className="mb-6">
-              <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${Math.min((pollCount * 5), 95)}%` }}
-                ></div>
-              </div>
-              <p className="text-xs text-gray-400">
-                {Math.floor(pollCount * 1.5)}s elapsed
-              </p>
-            </div>
-          )}
-          
-          {/* Back Button for Error State */}
-          {error && (
-            <div className="mt-6">
-              <Button 
-                onClick={() => router.push("/white-label-reports")}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Reports
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (!report) {
+  // Show error state if there's an error
+  if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center max-w-md mx-auto px-6">
-          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg 
-              className="w-10 h-10 text-gray-400" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
-              />
-            </svg>
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <X className="w-10 h-10 text-red-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">No Report Data</h2>
-          <p className="text-gray-600 mb-6">The report data could not be loaded.</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">Error</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
           <Button 
             onClick={() => router.push("/white-label-reports")}
             className="bg-blue-500 hover:bg-blue-600 text-white"
@@ -290,6 +202,11 @@ export default function ReportViewPage() {
         </div>
       </div>
     );
+  }
+
+  // Show nothing while loading - blank page until report is ready
+  if (!report) {
+    return null; // Blank page while waiting for report to load
   }
 
   // Provide defaults for missing data
