@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { isAuthenticated } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { toast } from "sonner";
+import html2pdf from "html2pdf.js";
 import {
   ArrowLeft,
   Share2,
@@ -121,6 +122,7 @@ export default function ReportViewPage() {
   const [loadingMessage, setLoadingMessage] = useState("Starting analysis...");
   const [error, setError] = useState<string | null>(null);
   const [pollCount, setPollCount] = useState(0);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -389,12 +391,46 @@ export default function ReportViewPage() {
     return "Your page needs significant work";
   };
 
+  const handleDownloadPDF = async () => {
+    if (!reportRef.current) return;
+    
+    try {
+      toast.loading("Generating PDF...");
+      
+      const options = {
+        margin: 0.5,
+        filename: `seo-report-${getHostname(safeReport.url)}.pdf`,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          letterRendering: true
+        },
+        jsPDF: { 
+          unit: 'in', 
+          format: 'a4', 
+          orientation: 'portrait' as const
+        }
+      };
+
+      await html2pdf().set(options).from(reportRef.current).save();
+      
+      toast.dismiss();
+      toast.success("PDF downloaded successfully!");
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast.dismiss();
+      toast.error("Failed to generate PDF. Please try again.");
+    }
+  };
+
   const radius = 80;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (safeReport.score / 100) * circumference;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div ref={reportRef} className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-[#2c3e50] text-white p-6">
         <div className="max-w-7xl mx-auto">
@@ -429,6 +465,7 @@ export default function ReportViewPage() {
               <Button
                 size="sm"
                 className="bg-blue-500 hover:bg-blue-600 text-white"
+                onClick={handleDownloadPDF}
               >
                 <Download className="h-4 w-4 mr-2" />
                 Download as PDF
