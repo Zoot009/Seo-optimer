@@ -1049,23 +1049,23 @@ export default function ReportViewPage() {
                   <div className="bg-gray-50 p-3 rounded space-y-2 text-sm">
                     {safeReport.localSEO.hasPhone && safeReport.localSEO.phoneNumber ? (
                       <div className="flex gap-2">
-                        <span className="text-gray-500 font-medium min-w-[60px]">Phone</span>
+                        <span className="text-gray-500 font-medium min-w-15">Phone</span>
                         <span className="text-gray-700">{safeReport.localSEO.phoneNumber}</span>
                       </div>
                     ) : (
                       <div className="flex gap-2">
-                        <span className="text-gray-500 font-medium min-w-[60px]">Phone</span>
+                        <span className="text-gray-500 font-medium min-w-15">Phone</span>
                         <span className="text-red-600">Not found</span>
                       </div>
                     )}
                     {safeReport.localSEO.hasAddress && safeReport.localSEO.addressText ? (
                       <div className="flex gap-2">
-                        <span className="text-gray-500 font-medium min-w-[60px]">Address</span>
+                        <span className="text-gray-500 font-medium min-w-15">Address</span>
                         <span className="text-gray-700">{safeReport.localSEO.addressText}</span>
                       </div>
                     ) : (
                       <div className="flex gap-2">
-                        <span className="text-gray-500 font-medium min-w-[60px]">Address</span>
+                        <span className="text-gray-500 font-medium min-w-15">Address</span>
                         <span className="text-red-600">Not found</span>
                       </div>
                     )}
@@ -1073,11 +1073,11 @@ export default function ReportViewPage() {
                 ) : (
                   <div className="bg-gray-50 p-3 rounded space-y-2 text-sm">
                     <div className="flex gap-2">
-                      <span className="text-gray-500 font-medium min-w-[60px]">Phone</span>
+                      <span className="text-gray-500 font-medium min-w-15">Phone</span>
                       <span className="text-red-600">Not found</span>
                     </div>
                     <div className="flex gap-2">
-                      <span className="text-gray-500 font-medium min-w-[60px]">Address</span>
+                      <span className="text-gray-500 font-medium min-w-15">Address</span>
                       <span className="text-red-600">Not found</span>
                     </div>
                   </div>
