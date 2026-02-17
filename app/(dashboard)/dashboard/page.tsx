@@ -31,11 +31,19 @@ export default function DashboardPage() {
   const handleShowAccountDetails = () => {
     setShowAccountDetails(true);
     setActiveMenu("My Account");
+    // Navigate to dashboard page if not already there
+    if (window.location.pathname !== "/dashboard") {
+      router.push("/dashboard");
+    }
   };
 
   const handleShowDashboard = () => {
     setShowAccountDetails(false);
     setActiveMenu("Dashboard");
+    // Navigate to dashboard page if not already there
+    if (window.location.pathname !== "/dashboard") {
+      router.push("/dashboard");
+    }
   };
 
   useEffect(() => {
@@ -73,7 +81,7 @@ export default function DashboardPage() {
           <button
             onClick={handleShowDashboard}
             className={`w-full px-6 py-3 text-left font-medium transition-colors ${
-              activeMenu === "Dashboard" ? "bg-[#2d3748] text-white" : "text-gray-300 hover:text-gray-100 hover:bg-[#1a1a1a]"
+              activeMenu === "Dashboard" && !showAccountDetails ? "bg-[#2d3748] text-white" : "text-gray-300 hover:text-gray-100 hover:bg-[#1a1a1a]"
             }`}
           >
             Dashboard
@@ -201,7 +209,7 @@ export default function DashboardPage() {
                 <button 
                   onClick={handleShowAccountDetails}
                   className={`w-full px-6 py-2 text-left text-sm transition-colors flex items-center gap-3 ${
-                    activeMenu === "My Account" ? "bg-[#2d3748] text-white" : "text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]"
+                    activeMenu === "My Account" && showAccountDetails ? "bg-[#2d3748] text-white" : "text-gray-400 hover:text-gray-200 hover:bg-[#1a1a1a]"
                   }`}
                 >
                   <User className="h-4 w-4" />
