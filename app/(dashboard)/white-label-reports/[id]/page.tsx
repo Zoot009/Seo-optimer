@@ -6,7 +6,6 @@ import { isAuthenticated } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { toast } from "sonner";
-import html2pdf from "html2pdf.js";
 import {
   ArrowLeft,
   Share2,
@@ -310,6 +309,9 @@ export default function ReportViewPage() {
     
     try {
       toast.loading("Generating PDF...");
+      
+      // Dynamically import html2pdf only on client side
+      const html2pdf = (await import("html2pdf.js")).default;
       
       const options = {
         margin: 0.5,
