@@ -117,7 +117,12 @@ export async function GET(
       triggerAnalysis(report.id, report.website);
     }
 
-    return NextResponse.json({ report });
+    return NextResponse.json({ report }, {
+      headers: {
+        'Cache-Control': 'private, max-age=30, must-revalidate',
+        'ETag': `W/"report-${id}-${report.updatedAt || report.createdAt}"`,
+      }
+    });
   } catch (error) {
     console.error("Error fetching report:", error);
     return NextResponse.json(
@@ -157,29 +162,49 @@ export async function DELETE(
       );
     }
 
-    // Check if report exists and belongs to user
-    const report = await prisma.report.findFirst({
-      where: {
-        id,
-        userId: payload.userId,
+    console.log(`[DELETE REPORT] Starting delete for report ${id} by user ${payload.userId}`);
+    const startTime = Date.now();
+
+    // First, check if report exists and get its size info
+    const reportInfo = await prisma.report.findFirst({
+      where: { id, userId: payload.userId },
+      select: { 
+        id: true, 
+        status: true,
+        reportData: true, // Need this to check size
       },
     });
 
-    if (!report) {
+    if (!reportInfo) {
       return NextResponse.json(
         { error: "Report not found or access denied" },
         { status: 404 }
       );
     }
 
+    const dataSize = reportInfo.reportData 
+      ? JSON.stringify(reportInfo.reportData).length 
+      : 0;
+    console.log(`[DELETE REPORT] Report status: ${reportInfo.status}, Data size: ${(dataSize / 1024).toFixed(2)} KB`);
+
     // Delete the report
+    const deleteStartTime = Date.now();
     await prisma.report.delete({
-      where: {
-        id,
-      },
+      where: { id },
     });
 
-    return NextResponse.json({ message: "Report deleted successfully" });
+    const deleteTime = Date.now() - deleteStartTime;
+    const totalTime = Date.now() - startTime;
+    console.log(`[DELETE REPORT] Delete query took ${deleteTime}ms, Total time: ${totalTime}ms`);
+
+    return NextResponse.json(
+      { message: "Report deleted successfully" },
+      {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      }
+    );
   } catch (error) {
     console.error("Error deleting report:", error);
     return NextResponse.json(

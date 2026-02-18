@@ -33,6 +33,7 @@ import {
   HelpCircle,
   ChevronUp,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 
 interface Report {
@@ -53,6 +54,7 @@ export default function WhiteLabelReportsPage() {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [reports, setReports] = useState<Report[]>([]);
   const [creating, setCreating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
@@ -75,21 +77,74 @@ export default function WhiteLabelReportsPage() {
     setLoading(false);
   }, [router]);
 
-  const fetchReports = async () => {
+  const fetchReports = async (skipCache = false) => {
     try {
       const token = localStorage.getItem("seomaster_auth_token");
+      
+      // Try to load from cache first if not skipping cache
+      if (!skipCache) {
+        try {
+          const cachedData = localStorage.getItem("reports_cache");
+          const cacheTime = localStorage.getItem("reports_cache_time");
+          
+          if (cachedData && cacheTime) {
+            const cacheAge = Date.now() - parseInt(cacheTime);
+            // Use cache if less than 30 seconds old
+            if (cacheAge < 30000) {
+              setReports(JSON.parse(cachedData));
+              return;
+            }
+          }
+        } catch (e) {
+          // If cache is corrupted, clear it
+          try {
+            localStorage.removeItem("reports_cache");
+            localStorage.removeItem("reports_cache_time");
+          } catch {}
+        }
+      }
+      
       const response = await fetch("/api/reports", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        cache: skipCache ? 'no-store' : 'default',
       });
+      
       if (response.ok) {
         const data = await response.json();
         setReports(data.reports);
+        
+        // Cache the results (only metadata, not full reportData)
+        try {
+          const cacheData = data.reports.map((r: Report) => ({
+            id: r.id,
+            website: r.website,
+            options: r.options,
+            status: r.status,
+            createdAt: r.createdAt,
+          }));
+          localStorage.setItem("reports_cache", JSON.stringify(cacheData));
+          localStorage.setItem("reports_cache_time", Date.now().toString());
+        } catch (storageError) {
+          // If storage quota exceeded, clear old cache and continue
+          console.warn("Cache storage failed, clearing old cache:", storageError);
+          try {
+            localStorage.removeItem("reports_cache");
+            localStorage.removeItem("reports_cache_time");
+          } catch {}
+        }
       }
     } catch (error) {
       console.error("Error fetching reports:", error);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchReports(true);
+    setRefreshing(false);
+    toast.success("Reports refreshed");
   };
 
   const handleAddReport = async () => {
@@ -99,6 +154,20 @@ export default function WhiteLabelReportsPage() {
     }
 
     setCreating(true);
+    const tempId = `temp-${Date.now()}`;
+    const tempReport: Report = {
+      id: tempId,
+      website: websiteUrl,
+      options: "Default",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+
+    // Optimistic UI update - add report immediately
+    setReports((prev) => [tempReport, ...prev]);
+    const urlToAdd = websiteUrl;
+    setWebsiteUrl("");
+
     try {
       const token = localStorage.getItem("seomaster_auth_token");
       const response = await fetch("/api/reports", {
@@ -108,20 +177,36 @@ export default function WhiteLabelReportsPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          website: websiteUrl,
+          website: urlToAdd,
           options: "Default",
         }),
       });
 
       if (response.ok) {
-        setWebsiteUrl("");
+        const data = await response.json();
+        // Replace temporary report with real one
+        setReports((prev) => 
+          prev.map((r) => (r.id === tempId ? data.report : r))
+        );
+        
+        // Invalidate cache
+        try {
+          localStorage.removeItem("reports_cache");
+          localStorage.removeItem("reports_cache_time");
+        } catch {}
+        
         toast.success("Report created successfully!");
-        fetchReports();
       } else {
+        // Remove temporary report on error
+        setReports((prev) => prev.filter((r) => r.id !== tempId));
+        setWebsiteUrl(urlToAdd);
         const error = await response.json();
         toast.error(error.error || "Failed to create report");
       }
     } catch (error) {
+      // Remove temporary report on error
+      setReports((prev) => prev.filter((r) => r.id !== tempId));
+      setWebsiteUrl(urlToAdd);
       console.error("Error creating report:", error);
       toast.error("Failed to create report");
     } finally {
@@ -147,9 +232,18 @@ export default function WhiteLabelReportsPage() {
   const confirmDelete = async () => {
     if (!reportToDelete) return;
 
+    // Store report in case we need to restore it
+    const reportToDeleteData = reports.find(r => r.id === reportToDelete);
+    
+    // Optimistic UI update - remove immediately
+    setReports((prev) => prev.filter((r) => r.id !== reportToDelete));
+    setDeleteDialogOpen(false);
+    const deletedReportId = reportToDelete;
+    setReportToDelete(null);
+
     try {
       const token = localStorage.getItem("seomaster_auth_token");
-      const response = await fetch(`/api/reports/${reportToDelete}`, {
+      const response = await fetch(`/api/reports/${deletedReportId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -157,14 +251,25 @@ export default function WhiteLabelReportsPage() {
       });
 
       if (response.ok) {
+        // Invalidate cache
+        try {
+          localStorage.removeItem("reports_cache");
+          localStorage.removeItem("reports_cache_time");
+        } catch {}
+        
         toast.success("Report deleted successfully");
-        setDeleteDialogOpen(false);
-        setReportToDelete(null);
-        fetchReports();
       } else {
+        // Restore report on error
+        if (reportToDeleteData) {
+          setReports((prev) => [reportToDeleteData, ...prev]);
+        }
         toast.error("Failed to delete report");
       }
     } catch (error) {
+      // Restore report on error
+      if (reportToDeleteData) {
+        setReports((prev) => [reportToDeleteData, ...prev]);
+      }
       console.error("Error deleting report:", error);
       toast.error("Failed to delete report");
     }
@@ -452,7 +557,16 @@ export default function WhiteLabelReportsPage() {
           {/* Search and Reports Table */}
           <div className="bg-white border border-gray-200 rounded-lg">
             {/* Search Bar */}
-            <div className="p-4 border-b border-gray-200 flex justify-end">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <Button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                variant="outline"
+                className="h-9 flex items-center gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </Button>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Search:</span>
                 <Input

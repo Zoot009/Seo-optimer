@@ -33,17 +33,38 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch reports for this user
+    // Fetch reports for this user (only metadata, not full reportData)
+    const startTime = Date.now();
     const reports = await prisma.report.findMany({
       where: {
         userId: payload.userId,
       },
+      select: {
+        id: true,
+        website: true,
+        options: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        scheduled: true,
+        // Explicitly exclude reportData to improve performance
+        // reportData: false (not needed for list view)
+      },
       orderBy: {
         createdAt: "desc",
       },
+      take: 100, // Limit to most recent 100 reports
     });
+    const queryTime = Date.now() - startTime;
+    console.log(`[REPORTS API] Fetched ${reports.length} reports for user ${payload.userId} in ${queryTime}ms`);
 
-    return NextResponse.json({ reports });
+    // Add caching headers - cache for 10 seconds
+    return NextResponse.json({ reports }, {
+      headers: {
+        'Cache-Control': 'private, max-age=10, must-revalidate',
+        'ETag': `W/"reports-${payload.userId}-${Date.now()}"`,
+      }
+    });
   } catch (error) {
     console.error("Error fetching reports:", error);
     return NextResponse.json(
@@ -98,13 +119,27 @@ export async function POST(request: NextRequest) {
         options: options,
         status: "pending",
       },
+      select: {
+        id: true,
+        website: true,
+        options: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        scheduled: true,
+      },
     });
 
     console.log(`[REPORT ${report.id}] Report created - analysis will start on first view`);
 
     return NextResponse.json(
       { message: "Report created successfully", report },
-      { status: 201 }
+      { 
+        status: 201,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      }
     );
   } catch (error) {
     console.error("Error creating report:", error);

@@ -48,4 +48,7 @@ model Report {
 
   @@map("reports")
   @@index([userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([id, userId])
 }
