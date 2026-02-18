@@ -9,6 +9,7 @@ async function triggerAnalysis(reportId: string, website: string) {
 
   console.log(`[REPORT ${reportId}] Starting SEO analysis for: ${website}`);
   console.log(`[REPORT ${reportId}] Backend URL: ${backendUrl}`);
+  console.log(`[REPORT ${reportId}] Backend API Key present: ${!!backendApiKey}`);
 
   fetch(`${backendUrl}/api/analyze`, {
     method: "POST",
@@ -22,37 +23,49 @@ async function triggerAnalysis(reportId: string, website: string) {
     }),
   })
     .then(async (response) => {
+      console.log(`[REPORT ${reportId}] Backend response status: ${response.status}`);
       if (!response.ok) {
+        const text = await response.text();
+        console.error(`[REPORT ${reportId}] Backend error response:`, text);
         throw new Error(`Backend returned status ${response.status}`);
       }
       return response.json();
     })
     .then(async (result) => {
       console.log(`[REPORT ${reportId}] Analysis completed successfully`);
+      console.log(`[REPORT ${reportId}] Result data size: ${JSON.stringify(result).length} bytes`);
+      
       // Update report with analysis results
-      await prisma.report.update({
+      const updatedReport = await prisma.report.update({
         where: { id: reportId },
         data: {
           status: "completed",
           reportData: result.data as any,
         },
       });
-      console.log(`[REPORT ${reportId}] Report updated to completed status`);
+      console.log(`[REPORT ${reportId}] Database updated - Report status: ${updatedReport.status}`);
+      console.log(`[REPORT ${reportId}] Report updated to completed status at ${new Date().toISOString()}`);
     })
     .catch(async (error) => {
       console.error(`[REPORT ${reportId}] Analysis failed:`, error);
       console.error(`[REPORT ${reportId}] Error message:`, error.message);
+      console.error(`[REPORT ${reportId}] Error stack:`, error.stack);
+      
       // Mark as failed
-      await prisma.report.update({
-        where: { id: reportId },
-        data: {
-          status: "failed",
-          reportData: {
-            error: error.message,
+      try {
+        await prisma.report.update({
+          where: { id: reportId },
+          data: {
+            status: "failed",
+            reportData: {
+              error: error.message,
+            },
           },
-        },
-      });
-      console.log(`[REPORT ${reportId}] Report marked as failed`);
+        });
+        console.log(`[REPORT ${reportId}] Report marked as failed in database`);
+      } catch (dbError) {
+        console.error(`[REPORT ${reportId}] Failed to update database with error status:`, dbError);
+      }
     });
 }
 

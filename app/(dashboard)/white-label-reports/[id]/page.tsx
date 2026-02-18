@@ -117,7 +117,10 @@ export default function ReportViewPage() {
   const params = useParams();
   const [report, setReport] = useState<ReportData | null>(null);
   const [reportMetadata, setReportMetadata] = useState<{ createdAt: string } | null>(null);
+  const [status, setStatus] = useState<string>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string>("Initializing...");
+  const [pollCount, setPollCount] = useState<number>(0);
   const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -139,6 +142,8 @@ export default function ReportViewPage() {
         ? `/api/reports/${params.id}?reanalyze=true`
         : `/api/reports/${params.id}`;
       
+      console.log(`[REPORT PAGE] Fetching report, reanalyze: ${reanalyze}`);
+      
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -148,23 +153,51 @@ export default function ReportViewPage() {
       if (response.ok) {
         const data = await response.json();
         
+        console.log(`[REPORT PAGE] Report status: ${data.report.status}`);
+        
         if (data.report.status === "completed" && data.report.reportData) {
           // Report is ready - display it immediately
+          console.log(`[REPORT PAGE] Report completed, displaying results`);
           setReport(data.report.reportData);
           setReportMetadata({ createdAt: data.report.createdAt });
+          setStatus("completed");
         } else if (data.report.status === "processing" || data.report.status === "pending") {
-          // Silent polling - check again in 1 second
-          setTimeout(() => fetchReport(false), 1000);
+          // Update status
+          setStatus(data.report.status);
+          if (data.report.status === "processing") {
+            setProgress("Analyzing website... This may take a minute.");
+          } else {
+            setProgress("Starting analysis...");
+          }
+          
+          // Check if we've exceeded max polling attempts (60 attempts = 2 minutes)
+          const newPollCount = pollCount + 1;
+          setPollCount(newPollCount);
+          
+          if (newPollCount > 60) {
+            console.error(`[REPORT PAGE] Max polling attempts reached (${newPollCount})`);
+            setStatus("failed");
+            setError("Report generation is taking too long. Please try again later.");
+            toast.error("Report generation timeout. Please try again.");
+            return;
+          }
+          
+          // Silent polling - check again in 2 seconds
+          console.log(`[REPORT PAGE] Status: ${data.report.status}, polling again in 2s (attempt ${newPollCount}/60)`);
+          setTimeout(() => fetchReport(false), 2000);
         } else if (data.report.status === "failed") {
+          console.error(`[REPORT PAGE] Report failed`);
+          setStatus("failed");
           setError("Report generation failed");
           toast.error("Report generation failed.");
         }
       } else {
+        console.error(`[REPORT PAGE] Failed to fetch report, status: ${response.status}`);
         setError("Failed to load report");
         toast.error("Failed to load report");
       }
     } catch (error) {
-      console.error("Error fetching report:", error);
+      console.error("[REPORT PAGE] Error fetching report:", error);
       setError("An error occurred while loading the report");
       toast.error("Failed to load report");
     }
@@ -205,7 +238,59 @@ export default function ReportViewPage() {
 
   // Show nothing while loading - blank page until report is ready
   if (!report) {
-    return null; // Blank page while waiting for report to load
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center max-w-md mx-auto px-6">
+          {/* Animated Logo/Icon */}
+          <div className="relative mb-8">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-24 h-24 bg-blue-100 rounded-full animate-ping opacity-20"></div>
+            </div>
+            <div className="relative flex items-center justify-center">
+              <div className="w-20 h-20 bg-linear-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <svg
+                  className="w-10 h-10 text-white animate-pulse"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          {/* Loading Spinner */}
+          <div className="mb-6">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500"></div>
+          </div>
+          
+          {/* Loading Text */}
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            {status === "processing" ? "Analyzing Website" : "Generating Report"}
+          </h2>
+          <p className="text-gray-600 mb-6 text-lg">
+            {progress}
+          </p>
+          
+          {/* Progress Dots */}
+          <div className="flex justify-center gap-2 mb-8">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+
+          <p className="text-sm text-gray-500">
+            This usually takes 30-60 seconds. Please wait...
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // Provide defaults for missing data
