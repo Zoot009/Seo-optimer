@@ -129,20 +129,25 @@ export default function ReportViewPage() {
       return;
     }
 
-    // Always trigger reanalysis when viewing a report
-    fetchReport(true);
+    // Reset poll count and always trigger reanalysis when viewing a report
+    setPollCount(0);
+    fetchReport(true, 0);
   }, [params.id]);
 
-  const fetchReport = async (reanalyze = false) => {
+  const fetchReport = async (reanalyze = false, currentPollCount = pollCount) => {
     try {
       const token = localStorage.getItem("seomaster_auth_token");
       
-      // Add reanalyze query param to always fetch fresh data
+      // For initial load or reanalysis, fetch with full data
+      // For polling, only check status (statusOnly=true)
+      const isPolling = !reanalyze && currentPollCount > 0;
       const url = reanalyze 
         ? `/api/reports/${params.id}?reanalyze=true`
+        : isPolling
+        ? `/api/reports/${params.id}?statusOnly=true`
         : `/api/reports/${params.id}`;
       
-      console.log(`[REPORT PAGE] Fetching report, reanalyze: ${reanalyze}`);
+      console.log(`[REPORT PAGE] Fetching report, reanalyze: ${reanalyze}, polling: ${isPolling}, attempt: ${currentPollCount}`);
       
       const response = await fetch(url, {
         headers: {
@@ -155,12 +160,32 @@ export default function ReportViewPage() {
         
         console.log(`[REPORT PAGE] Report status: ${data.report.status}`);
         
-        if (data.report.status === "completed" && data.report.reportData) {
-          // Report is ready - display it immediately
-          console.log(`[REPORT PAGE] Report completed, displaying results`);
-          setReport(data.report.reportData);
-          setReportMetadata({ createdAt: data.report.createdAt });
-          setStatus("completed");
+        if (data.report.status === "completed") {
+          // If we only got status, fetch full data now
+          if (isPolling) {
+            console.log(`[REPORT PAGE] Status is completed, fetching full report data`);
+            const fullResponse = await fetch(`/api/reports/${params.id}`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            
+            if (fullResponse.ok) {
+              const fullData = await fullResponse.json();
+              if (fullData.report.reportData) {
+                setReport(fullData.report.reportData);
+                setReportMetadata({ createdAt: fullData.report.createdAt });
+                setStatus("completed");
+                console.log(`[REPORT PAGE] Full report loaded and displayed`);
+              }
+            }
+          } else if (data.report.reportData) {
+            // We already have full data
+            console.log(`[REPORT PAGE] Report completed, displaying results`);
+            setReport(data.report.reportData);
+            setReportMetadata({ createdAt: data.report.createdAt });
+            setStatus("completed");
+          }
         } else if (data.report.status === "processing" || data.report.status === "pending") {
           // Update status
           setStatus(data.report.status);
@@ -171,7 +196,7 @@ export default function ReportViewPage() {
           }
           
           // Check if we've exceeded max polling attempts (60 attempts = 2 minutes)
-          const newPollCount = pollCount + 1;
+          const newPollCount = currentPollCount + 1;
           setPollCount(newPollCount);
           
           if (newPollCount > 60) {
@@ -182,9 +207,9 @@ export default function ReportViewPage() {
             return;
           }
           
-          // Silent polling - check again in 2 seconds
+          // Silent polling - check again in 2 seconds with updated count
           console.log(`[REPORT PAGE] Status: ${data.report.status}, polling again in 2s (attempt ${newPollCount}/60)`);
-          setTimeout(() => fetchReport(false), 2000);
+          setTimeout(() => fetchReport(false, newPollCount), 2000);
         } else if (data.report.status === "failed") {
           console.error(`[REPORT PAGE] Report failed`);
           setStatus("failed");

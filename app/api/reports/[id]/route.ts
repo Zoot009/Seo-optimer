@@ -80,6 +80,7 @@ export async function GET(
     // Get query parameters
     const url = new URL(request.url);
     const reanalyze = url.searchParams.get("reanalyze") === "true";
+    const statusOnly = url.searchParams.get("statusOnly") === "true";
 
     // Get token from Authorization header
     const authHeader = request.headers.get("authorization");
@@ -103,7 +104,39 @@ export async function GET(
       );
     }
 
-    // Fetch the report
+    // If statusOnly, just check status without fetching large reportData
+    if (statusOnly) {
+      console.log(`[REPORT ${id}] Status-only check requested (lightweight polling)`);
+      const report = await prisma.report.findFirst({
+        where: {
+          id,
+          userId: payload.userId,
+        },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!report) {
+        return NextResponse.json(
+          { error: "Report not found or access denied" },
+          { status: 404 }
+        );
+      }
+
+      console.log(`[REPORT ${id}] Status check result: ${report.status}`);
+      return NextResponse.json({ report }, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      });
+    }
+
+    // Fetch the report (with full data)
+    console.log(`[REPORT ${id}] Fetching full report data (reanalyze: ${reanalyze})`);
     let report = await prisma.report.findFirst({
       where: {
         id,
@@ -117,6 +150,8 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    console.log(`[REPORT ${id}] Report status: ${report.status}, has data: ${!!report.reportData}`);
 
     // If report is pending or reanalyze is requested, trigger analysis
     if (report.status === "pending" || reanalyze) {
