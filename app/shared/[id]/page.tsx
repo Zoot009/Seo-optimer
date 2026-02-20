@@ -1,26 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { isAuthenticated } from "@/lib/auth-client";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import Link from "next/link";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
-  Share2,
   Download,
   X,
-  Copy,
-  Check,
 } from "lucide-react";
 
 interface ReportData {
@@ -122,121 +108,43 @@ interface ReportData {
   }>;
 }
 
-export default function ReportViewPage() {
-  const router = useRouter();
+export default function PublicReportPage() {
   const params = useParams();
   const [report, setReport] = useState<ReportData | null>(null);
   const [reportMetadata, setReportMetadata] = useState<{ createdAt: string } | null>(null);
-  const [status, setStatus] = useState<string>("loading");
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<string>("Initializing...");
-  const [pollCount, setPollCount] = useState<number>(0);
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const reportRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!isAuthenticated()) {
-      router.push("/login");
-      return;
-    }
-
-    // Reset poll count and always trigger reanalysis when viewing a report
-    setPollCount(0);
-    fetchReport(true, 0);
+    fetchReport();
   }, [params.id]);
 
-  const fetchReport = async (reanalyze = false, currentPollCount = pollCount) => {
+  const fetchReport = async () => {
     try {
-      const token = localStorage.getItem("seomaster_auth_token");
-      
-      // For initial load or reanalysis, fetch with full data
-      // For polling, only check status (statusOnly=true)
-      const isPolling = !reanalyze && currentPollCount > 0;
-      const url = reanalyze 
-        ? `/api/reports/${params.id}?reanalyze=true`
-        : isPolling
-        ? `/api/reports/${params.id}?statusOnly=true`
-        : `/api/reports/${params.id}`;
-      
-      console.log(`[REPORT PAGE] Fetching report, reanalyze: ${reanalyze}, polling: ${isPolling}, attempt: ${currentPollCount}`);
-      
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      setLoading(true);
+      const response = await fetch(`/api/reports/public/${params.id}`);
 
       if (response.ok) {
         const data = await response.json();
         
-        console.log(`[REPORT PAGE] Report status: ${data.report.status}`);
-        
-        if (data.report.status === "completed") {
-          // If we only got status, fetch full data now
-          if (isPolling) {
-            console.log(`[REPORT PAGE] Status is completed, fetching full report data`);
-            const fullResponse = await fetch(`/api/reports/${params.id}`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            });
-            
-            if (fullResponse.ok) {
-              const fullData = await fullResponse.json();
-              if (fullData.report.reportData) {
-                setReport(fullData.report.reportData);
-                setReportMetadata({ createdAt: fullData.report.createdAt });
-                setStatus("completed");
-                console.log(`[REPORT PAGE] Full report loaded and displayed`);
-              }
-            }
-          } else if (data.report.reportData) {
-            // We already have full data
-            console.log(`[REPORT PAGE] Report completed, displaying results`);
-            setReport(data.report.reportData);
-            setReportMetadata({ createdAt: data.report.createdAt });
-            setStatus("completed");
-          }
-        } else if (data.report.status === "processing" || data.report.status === "pending") {
-          // Update status
-          setStatus(data.report.status);
-          if (data.report.status === "processing") {
-            setProgress("Analyzing website... This may take a minute.");
-          } else {
-            setProgress("Starting analysis...");
-          }
-          
-          // Check if we've exceeded max polling attempts (60 attempts = 2 minutes)
-          const newPollCount = currentPollCount + 1;
-          setPollCount(newPollCount);
-          
-          if (newPollCount > 60) {
-            console.error(`[REPORT PAGE] Max polling attempts reached (${newPollCount})`);
-            setStatus("failed");
-            setError("Report generation is taking too long. Please try again later.");
-            toast.error("Report generation timeout. Please try again.");
-            return;
-          }
-          
-          // Silent polling - check again in 2 seconds with updated count
-          console.log(`[REPORT PAGE] Status: ${data.report.status}, polling again in 2s (attempt ${newPollCount}/60)`);
-          setTimeout(() => fetchReport(false, newPollCount), 2000);
-        } else if (data.report.status === "failed") {
-          console.error(`[REPORT PAGE] Report failed`);
-          setStatus("failed");
-          setError("Report generation failed");
-          toast.error("Report generation failed.");
+        if (data.report.status === "completed" && data.report.reportData) {
+          setReport(data.report.reportData);
+          setReportMetadata({ createdAt: data.report.createdAt });
+        } else if (data.report.status === "pending" || data.report.status === "processing") {
+          setError("This report is still being generated. Please check back in a few minutes.");
+        } else {
+          setError("This report is not available yet.");
         }
+      } else if (response.status === 404) {
+        setError("Report not found. The link may be invalid or the report may have been deleted.");
       } else {
-        console.error(`[REPORT PAGE] Failed to fetch report, status: ${response.status}`);
-        setError("Failed to load report");
-        toast.error("Failed to load report");
+        setError("Failed to load report. Please try again later.");
       }
     } catch (error) {
-      console.error("[REPORT PAGE] Error fetching report:", error);
-      setError("An error occurred while loading the report");
-      toast.error("Failed to load report");
+      console.error("Error fetching report:", error);
+      setError("An error occurred while loading the report.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -251,7 +159,67 @@ export default function ReportViewPage() {
     }
   };
 
-  // Show error state if there's an error
+  const handleDownloadPDF = async () => {
+    try {
+      toast.loading("Generating PDF...");
+      
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:6478";
+      const backendApiKey = process.env.NEXT_PUBLIC_API_KEY;
+      
+      const response = await fetch(`${backendUrl}/api/generate-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': backendApiKey || '',
+        },
+        body: JSON.stringify({
+          reportData: safeReport
+        }),
+      });
+
+      if (!response.ok) {
+        // Try to get error message from JSON
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to generate PDF');
+        }
+        throw new Error(`Failed to generate PDF (${response.status})`);
+      }
+
+      // Verify content type is PDF
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/pdf')) {
+        console.error('Invalid content type:', contentType);
+        throw new Error('Server did not return a PDF file');
+      }
+
+      // Get PDF blob
+      const blob = await response.blob();
+      console.log('PDF blob size:', blob.size, 'bytes');
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `seo-report-${getHostname(safeReport.url)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.dismiss();
+      toast.success("PDF downloaded successfully!");
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast.dismiss();
+      toast.error(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Please try again'}`);
+    }
+  };
+
+  // Show error state
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -259,26 +227,18 @@ export default function ReportViewPage() {
           <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <X className="w-10 h-10 text-red-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">Error</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">Unable to Load Report</h2>
           <p className="text-gray-600 mb-6">{error}</p>
-          <Button 
-            onClick={() => router.push("/white-label-reports")}
-            className="bg-blue-500 hover:bg-blue-600 text-white"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Reports
-          </Button>
         </div>
       </div>
     );
   }
 
-  // Show nothing while loading - blank page until report is ready
-  if (!report) {
+  // Show loading state
+  if (loading || !report) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center max-w-md mx-auto px-6">
-          {/* Animated Logo/Icon */}
           <div className="relative mb-8">
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-24 h-24 bg-blue-100 rounded-full animate-ping opacity-20"></div>
@@ -302,29 +262,22 @@ export default function ReportViewPage() {
             </div>
           </div>
           
-          {/* Loading Spinner */}
           <div className="mb-6">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500"></div>
           </div>
           
-          {/* Loading Text */}
           <h2 className="text-2xl font-bold text-gray-900 mb-3">
-            {status === "processing" ? "Analyzing Website" : "Generating Report"}
+            Loading Report
           </h2>
           <p className="text-gray-600 mb-6 text-lg">
-            {progress}
+            Please wait while we load your SEO report...
           </p>
           
-          {/* Progress Dots */}
-          <div className="flex justify-center gap-2 mb-8">
+          <div className="flex justify-center gap-2">
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
           </div>
-
-          <p className="text-sm text-gray-500">
-            This usually takes 30-60 seconds. Please wait...
-          </p>
         </div>
       </div>
     );
@@ -426,120 +379,18 @@ export default function ReportViewPage() {
     return "Your page needs significant work";
   };
 
-  const handleShare = () => {
-    setShareDialogOpen(true);
-    setCopied(false);
-  };
-
-  const handleCopyLink = () => {
-    const shareUrl = `${window.location.origin}/shared/${params.id}`;
-    navigator.clipboard.writeText(shareUrl).then(() => {
-      setCopied(true);
-      toast.success("Link copied to clipboard!");
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {
-      toast.error("Failed to copy link");
-    });
-  };
-
-  const handleDownloadPDF = async () => {
-    try {
-      toast.loading("Generating PDF...");
-      
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:6478";
-      const backendApiKey = process.env.NEXT_PUBLIC_API_KEY;
-      
-      const response = await fetch(`${backendUrl}/api/generate-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': backendApiKey || '',
-        },
-        body: JSON.stringify({
-          reportData: safeReport
-        }),
-      });
-
-      if (!response.ok) {
-        // Try to get error message from JSON
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to generate PDF');
-        }
-        throw new Error(`Failed to generate PDF (${response.status})`);
-      }
-
-      // Verify content type is PDF
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/pdf')) {
-        console.error('Invalid content type:', contentType);
-        throw new Error('Server did not return a PDF file');
-      }
-
-      // Get PDF blob
-      const blob = await response.blob();
-      console.log('PDF blob size:', blob.size, 'bytes');
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `seo-report-${getHostname(safeReport.url)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      toast.dismiss();
-      toast.success("PDF downloaded successfully!");
-    } catch (error) {
-      console.error('PDF generation error:', error);
-      toast.dismiss();
-      toast.error(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Please try again'}`);
-    }
-  };
-
   const radius = 80;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (safeReport.score / 100) * circumference;
 
   return (
-    <div ref={reportRef} className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-[#2c3e50] text-white p-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-4">
-            <Link href="/white-label-reports">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-white/10"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Reports
-              </Button>
-            </Link>
+            <div className="text-2xl font-bold">SEO Report</div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-white/10"
-              >
-                <Share2 className="h-4 w-4 mr-2" />
-                Options
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-white/10"
-                onClick={handleShare}
-              >
-                <Share2 className="h-4 w-4 mr-2" />
-                Share
-              </Button>
               <Button
                 size="sm"
                 className="bg-blue-500 hover:bg-blue-600 text-white"
@@ -549,6 +400,15 @@ export default function ReportViewPage() {
                 Download as PDF
               </Button>
             </div>
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold">{safeReport.title || getHostname(safeReport.url)}</h1>
+            <p className="text-blue-200">{safeReport.url}</p>
+            {reportMetadata && (
+              <p className="text-sm text-gray-300">
+                Report generated on {new Date(reportMetadata.createdAt).toLocaleDateString()}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -764,7 +624,7 @@ export default function ReportViewPage() {
         </div>
 
         {/* Add extra spacing for overlapping mobile view */}
-        <div className="mb-12"></div>
+        <div className=" mb-12"></div>
 
         {/* Recommendations Section */}
         {safeReport.recommendations.length > 0 && (
@@ -854,7 +714,7 @@ export default function ReportViewPage() {
                   ? "You have a Title Tag of optimal length (between 50 and 60 characters)."
                   : safeReport.metaTags.titleLength < 50
                   ? "You have a Title Tag, but ideally it should be lengthened to between 50 and 60 characters (including spaces)."
-                  : "You have a Title Tag, but ideally it should be shortened to between 50 and 60 characters (including spaces)."}
+                  : "You have a Title Tag, but ideally should be shortened to between 50 and 60 characters (including spaces)."}
               </p>
               {safeReport.title && (
                 <div className="bg-gray-50 p-4 rounded mb-3">
@@ -1268,50 +1128,11 @@ export default function ReportViewPage() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Share Dialog */}
-      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Share Report</DialogTitle>
-            <DialogDescription>
-              Copy this link to share your SEO report with your clients.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center space-x-2">
-            <div className="grid flex-1 gap-2">
-              <Input
-                id="link"
-                defaultValue={`${typeof window !== 'undefined' ? window.location.origin : ''}/shared/${params.id}`}
-                readOnly
-                className="h-10"
-              />
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              className="px-3"
-              onClick={handleCopyLink}
-            >
-              {copied ? (
-                <>
-                  <Check className="h-4 w-4 mr-1" />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Copy className="h-4 w-4 mr-1" />
-                  Copy
-                </>
-              )}
-            </Button>
-          </div>
-          <div className="text-xs text-gray-500 mt-2">
-            Anyone with this link will be able to view this report.
-          </div>
-        </DialogContent>
-      </Dialog>
+        <div className="text-center text-gray-500 text-sm mt-8 pb-8">
+          <p>Powered by SEOmaster</p>
+        </div>
+      </div>
     </div>
   );
 }

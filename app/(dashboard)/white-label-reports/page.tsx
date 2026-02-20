@@ -34,6 +34,8 @@ import {
   ChevronUp,
   Trash2,
   RefreshCw,
+  Copy,
+  Check,
 } from "lucide-react";
 
 interface Report {
@@ -58,6 +60,9 @@ export default function WhiteLabelReportsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [reportToShare, setReportToShare] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const toggleMenu = (menu: string) => {
     setExpandedMenus((prev) =>
@@ -222,6 +227,25 @@ export default function WhiteLabelReportsPage() {
 
   const handleViewReport = (reportId: string) => {
     window.open(`/white-label-reports/${reportId}`, '_blank');
+  };
+
+  const handleShareReport = (reportId: string) => {
+    setReportToShare(reportId);
+    setShareDialogOpen(true);
+    setCopied(false);
+  };
+
+  const handleCopyLink = () => {
+    if (!reportToShare) return;
+    
+    const shareUrl = `${window.location.origin}/shared/${reportToShare}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      toast.success("Link copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      toast.error("Failed to copy link");
+    });
   };
 
   const handleDeleteReport = (reportId: string) => {
@@ -660,6 +684,18 @@ export default function WhiteLabelReportsPage() {
                             </Button>
                             <Button
                               size="sm"
+                              variant="outline"
+                              className="h-8 px-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleShareReport(report.id);
+                              }}
+                              title="Share Report"
+                            >
+                              <LinkIcon className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
                               variant="ghost"
                               className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                               onClick={(e) => {
@@ -706,6 +742,49 @@ export default function WhiteLabelReportsPage() {
                 Delete Report
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Share Dialog */}
+        <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+          <DialogContent className="sm:max-w-md z-50">
+            <DialogHeader>
+              <DialogTitle>Share Report</DialogTitle>
+              <DialogDescription>
+                Copy this link to share your SEO report with your clients.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center space-x-2">
+              <div className="grid flex-1 gap-2">
+                <Input
+                  id="link"
+                  value={reportToShare ? `${typeof window !== 'undefined' ? window.location.origin : ''}/shared/${reportToShare}` : ''}
+                  readOnly
+                  className="h-10"
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="px-3"
+                onClick={handleCopyLink}
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-4 w-4 mr-1" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4 mr-1" />
+                    Copy
+                  </>
+                )}
+              </Button>
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              Anyone with this link will be able to view this report.
+            </div>
           </DialogContent>
         </Dialog>
       </div>
