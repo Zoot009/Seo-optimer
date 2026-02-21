@@ -180,6 +180,92 @@ export async function GET(
   }
 }
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    // Await params
+    const { id } = await params;
+
+    // Get token from Authorization header
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.startsWith("Bearer ")
+      ? authHeader.substring(7)
+      : request.cookies.get("token")?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    // Verify token
+    const payload = verifyToken(token);
+    if (!payload) {
+      return NextResponse.json(
+        { error: "Invalid or expired token" },
+        { status: 401 }
+      );
+    }
+
+    // Parse the request body
+    const body = await request.json();
+    const { reportData } = body;
+
+    if (!reportData) {
+      return NextResponse.json(
+        { error: "Report data is required" },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[UPDATE REPORT] Updating report ${id} for user ${payload.userId}`);
+
+    // First, verify the report belongs to this user
+    const existingReport = await prisma.report.findFirst({
+      where: { id, userId: payload.userId },
+    });
+
+    if (!existingReport) {
+      return NextResponse.json(
+        { error: "Report not found or access denied" },
+        { status: 404 }
+      );
+    }
+
+    // Update the report data
+    const updatedReport = await prisma.report.update({
+      where: { id },
+      data: {
+        reportData: reportData as any,
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log(`[UPDATE REPORT] Report ${id} updated successfully`);
+
+    return NextResponse.json(
+      { 
+        message: "Report updated successfully",
+        report: updatedReport
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+      }
+    );
+  } catch (error) {
+    console.error("Error updating report:", error);
+    return NextResponse.json(
+      { error: "Failed to update report" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

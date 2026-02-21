@@ -21,7 +21,11 @@ import {
   X,
   Copy,
   Check,
+  Save,
+  Trash2,
+  Plus,
 } from "lucide-react";
+import { EditableField, EditableScore } from "@/components/editable-field";
 
 interface ReportData {
   url: string;
@@ -133,6 +137,8 @@ export default function ReportViewPage() {
   const [pollCount, setPollCount] = useState<number>(0);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [saving, setSaving] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -502,6 +508,90 @@ export default function ReportViewPage() {
     }
   };
 
+  const handleSaveChanges = async () => {
+    if (!report || !params.id) return;
+
+    try {
+      setSaving(true);
+      toast.loading("Saving changes...");
+
+      const token = localStorage.getItem("seomaster_auth_token");
+      const response = await fetch(`/api/reports/${params.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          reportData: report,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save changes");
+      }
+
+      toast.dismiss();
+      toast.success("Changes saved successfully!");
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error("Error saving changes:", error);
+      toast.dismiss();
+      toast.error("Failed to save changes");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateReportField = (path: string[], value: any) => {
+    if (!report) return;
+
+    const newReport = JSON.parse(JSON.stringify(report));
+    let current = newReport;
+
+    for (let i = 0; i < path.length - 1; i++) {
+      current = current[path[i]];
+    }
+
+    current[path[path.length - 1]] = value;
+    setReport(newReport);
+    setHasUnsavedChanges(true);
+  };
+
+  const removeRecommendation = (index: number) => {
+    if (!report) return;
+    const newRecommendations = report.recommendations.filter((_, i) => i !== index);
+    updateReportField(["recommendations"], newRecommendations);
+  };
+
+  const addRecommendation = () => {
+    if (!report) return;
+    const newRec = {
+      title: "New recommendation",
+      category: "On-Page SEO",
+      priority: "High",
+    };
+    const newRecommendations = [...report.recommendations, newRec];
+    updateReportField(["recommendations"], newRecommendations);
+  };
+
+  const updateRecommendation = (index: number, field: string, value: string) => {
+    if (!report) return;
+    const newRecommendations = [...report.recommendations];
+    newRecommendations[index] = { ...newRecommendations[index], [field]: value };
+    updateReportField(["recommendations"], newRecommendations);
+  };
+
+  // Helper function to check if a recommendation exists for a specific section
+  const hasRecommendationFor = (sectionKeywords: string[]): boolean => {
+    if (!report) return false;
+    return report.recommendations.some(rec =>
+      sectionKeywords.some(keyword =>
+        rec.title.toLowerCase().includes(keyword.toLowerCase())
+      )
+    );
+  };
+
   const radius = 80;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (safeReport.score / 100) * circumference;
@@ -523,6 +613,17 @@ export default function ReportViewPage() {
               </Button>
             </Link>
             <div className="flex items-center gap-2">
+              {hasUnsavedChanges && (
+                <Button
+                  size="sm"
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                  onClick={handleSaveChanges}
+                  disabled={saving}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {saving ? "Saving..." : "Save Changes"}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -555,6 +656,21 @@ export default function ReportViewPage() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto p-8">
+        {/* Edit Mode Info Banner */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+          <div className="shrink-0 mt-0.5">
+            <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm text-blue-800">
+              <span className="font-semibold">Edit Mode Enabled:</span> Double-click on any score, title, description, or text field to edit it. 
+              Click the <span className="font-semibold">"Save Changes"</span> button when you're done editing.
+            </p>
+          </div>
+        </div>
+
         {/* Introduction */}
         <div className="bg-white rounded-lg p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -626,7 +742,11 @@ export default function ReportViewPage() {
                         safeReport.score
                       )}`}
                     >
-                      {safeReport.score}
+                      <EditableScore
+                        score={safeReport.score}
+                        onSave={(newScore) => updateReportField(["score"], newScore)}
+                        className="inline-block"
+                      />
                     </div>
                   </div>
                 </div>
@@ -634,17 +754,23 @@ export default function ReportViewPage() {
               <p className="text-gray-700 font-medium mt-4 text-lg">
                 {getScoreMessage(safeReport.score)}
               </p>
-              {safeReport.recommendations.length > 0 && (
-                <button
-                  onClick={() => {
-                    const element = document.getElementById('recommendations-section');
-                    element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }}
-                  className="mt-3 inline-block bg-pink-50 text-pink-600 px-4 py-2 rounded-lg hover:bg-pink-100 transition-colors cursor-pointer"
-                >
-                  <span className="font-semibold">Recommendations: {safeReport.recommendations.length}</span>
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  const element = document.getElementById('recommendations-section');
+                  element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className={`mt-3 inline-block px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+                  safeReport.recommendations.length > 0
+                    ? "bg-pink-50 text-pink-600 hover:bg-pink-100"
+                    : "bg-green-50 text-green-600 hover:bg-green-100"
+                }`}
+              >
+                <span className="font-semibold">
+                  {safeReport.recommendations.length > 0
+                    ? `Recommendations: ${safeReport.recommendations.length}`
+                    : "No issues found! ✓"}
+                </span>
+              </button>
 
               {/* Category Scores */}
               <div className="mt-8 grid grid-cols-2 gap-6 w-full max-w-md">
@@ -675,7 +801,11 @@ export default function ReportViewPage() {
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className={`text-2xl font-bold ${getScoreColor(safeReport.onPageSEO.score)}`}>
-                        {safeReport.onPageSEO.score}
+                        <EditableScore
+                          score={safeReport.onPageSEO.score}
+                          onSave={(newScore) => updateReportField(["onPageSEO", "score"], newScore)}
+                          className="inline-block"
+                        />
                       </div>
                     </div>
                   </div>
@@ -709,7 +839,11 @@ export default function ReportViewPage() {
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className={`text-2xl font-bold ${safeReport.social.score === 0 ? "text-gray-400" : getScoreColor(safeReport.social.score)}`}>
-                        {safeReport.social.score}
+                        <EditableScore
+                          score={safeReport.social.score}
+                          onSave={(newScore) => updateReportField(["social", "score"], newScore)}
+                          className="inline-block"
+                        />
                       </div>
                     </div>
                   </div>
@@ -767,30 +901,71 @@ export default function ReportViewPage() {
         <div className="mb-12"></div>
 
         {/* Recommendations Section */}
-        {safeReport.recommendations.length > 0 && (
-          <div id="recommendations-section" className="bg-white rounded-lg p-8 mt-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              Recommendations
+        <div id="recommendations-section" className="bg-white rounded-lg p-8 mt-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Recommendations ({safeReport.recommendations.length})
             </h2>
+            <Button
+              onClick={addRecommendation}
+              size="sm"
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Recommendation
+            </Button>
+          </div>
+
+          {safeReport.recommendations.length > 0 ? (
             <div className="space-y-1">
               {safeReport.recommendations.map((rec, index) => (
-                <div key={index} className="flex items-center justify-between py-4 border-b border-gray-100 last:border-b-0">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{rec.title}</h4>
+                <div key={index} className="flex items-center justify-between py-4 border-b border-gray-100 last:border-b-0 group">
+                  <div className="flex-1 mr-4">
+                    <div className="mb-2">
+                      <EditableField
+                        value={rec.title}
+                        onSave={(newValue) => updateRecommendation(index, "title", String(newValue))}
+                        displayClassName="font-medium text-gray-900"
+                        placeholder="Recommendation title"
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm">
-                      {rec.category}
-                    </span>
-                    <span className="text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm font-medium">
-                      {rec.priority}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-30">
+                      <EditableField
+                        value={rec.category}
+                        onSave={(newValue) => updateRecommendation(index, "category", String(newValue))}
+                        displayClassName="text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm inline-block"
+                        placeholder="Category"
+                      />
+                    </div>
+                    <div className="min-w-20">
+                      <EditableField
+                        value={rec.priority}
+                        onSave={(newValue) => updateRecommendation(index, "priority", String(newValue))}
+                        displayClassName="text-green-600 bg-green-50 px-3 py-1 rounded-full text-sm font-medium inline-block"
+                        placeholder="Priority"
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeRecommendation(index)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700 hover:bg-red-50"
+                      title="Remove recommendation"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No recommendations yet. Click "Add Recommendation" to create one.</p>
+            </div>
+          )}
+        </div>
 
         {/* On-Page SEO Results Section */}
         <div className="bg-white rounded-lg p-8 mt-6">
@@ -825,16 +1000,29 @@ export default function ReportViewPage() {
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className={`text-5xl font-bold ${getScoreColor(safeReport.onPageSEO.score)}`}>
-                  {safeReport.onPageSEO.score}
+                  <EditableScore
+                    score={safeReport.onPageSEO.score}
+                    onSave={(newScore) => updateReportField(["onPageSEO", "score"], newScore)}
+                    className="inline-block"
+                  />
                 </div>
               </div>
             </div>
             <div className="flex-1">
               <h3 className="text-2xl font-semibold text-gray-900 mb-3">
-                {safeReport.onPageSEO.message}
+                <EditableField
+                  value={safeReport.onPageSEO.message}
+                  onSave={(newValue) => updateReportField(["onPageSEO", "message"], newValue)}
+                  displayClassName="text-2xl font-semibold text-gray-900"
+                />
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                {safeReport.onPageSEO.description}
+                <EditableField
+                  value={safeReport.onPageSEO.description}
+                  onSave={(newValue) => updateReportField(["onPageSEO", "description"], newValue)}
+                  multiline={true}
+                  displayClassName="text-gray-600 leading-relaxed"
+                />
               </p>
             </div>
           </div>
@@ -845,7 +1033,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Title Tag</h4>
-                <span className={`text-3xl font-bold ${safeReport.metaTags.hasTitle && safeReport.metaTags.titleLength >= 50 && safeReport.metaTags.titleLength <= 60 ? "text-green-500" : "text-red-500"}`}>{safeReport.metaTags.hasTitle && safeReport.metaTags.titleLength >= 50 && safeReport.metaTags.titleLength <= 60 ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["title tag", "title"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["title tag", "title"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600 mb-3">
                 {!safeReport.metaTags.hasTitle
@@ -858,7 +1046,16 @@ export default function ReportViewPage() {
               </p>
               {safeReport.title && (
                 <div className="bg-gray-50 p-4 rounded mb-3">
-                  <p className="text-gray-800">{safeReport.title}</p>
+                  <p className="text-gray-800">
+                    <EditableField
+                      value={safeReport.title}
+                      onSave={(newValue) => {
+                        updateReportField(["title"], newValue);
+                        updateReportField(["metaTags", "titleLength"], String(newValue).length);
+                      }}
+                      displayClassName="text-gray-800"
+                    />
+                  </p>
                   <p className="text-gray-500 text-sm mt-2">Length : {safeReport.metaTags.titleLength}</p>
                 </div>
               )}
@@ -871,7 +1068,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Meta Description Tag</h4>
-                <span className={`text-3xl font-bold ${safeReport.metaTags.hasDescription && safeReport.metaTags.descriptionLength >= 120 && safeReport.metaTags.descriptionLength <= 160 ? "text-green-500" : "text-red-500"}`}>{safeReport.metaTags.hasDescription && safeReport.metaTags.descriptionLength >= 120 && safeReport.metaTags.descriptionLength <= 160 ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["meta description", "description tag"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["meta description", "description tag"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600 mb-3">
                 {!safeReport.metaTags.hasDescription
@@ -884,7 +1081,17 @@ export default function ReportViewPage() {
               </p>
               {safeReport.description && (
                 <div className="bg-gray-50 p-4 rounded mb-3">
-                  <p className="text-gray-800">{safeReport.description}</p>
+                  <p className="text-gray-800">
+                    <EditableField
+                      value={safeReport.description}
+                      onSave={(newValue) => {
+                        updateReportField(["description"], newValue);
+                        updateReportField(["metaTags", "descriptionLength"], String(newValue).length);
+                      }}
+                      multiline={true}
+                      displayClassName="text-gray-800"
+                    />
+                  </p>
                   <p className="text-gray-500 text-sm mt-2">Length : {safeReport.metaTags.descriptionLength}</p>
                 </div>
               )}
@@ -897,8 +1104,8 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">H1 Header Tag Usage</h4>
-                <span className={`text-3xl font-bold ${safeReport.headings.h1Count === 1 ? "text-green-500" : "text-red-500"}`}>
-                  {safeReport.headings.h1Count === 1 ? "✓" : "✗"}
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["h1", "h1 tag", "h1 header"]) ? "text-green-500" : "text-red-500"}`}>
+                  {!hasRecommendationFor(["h1", "h1 tag", "h1 header"]) ? "✓" : "✗"}
                 </span>
               </div>
               <p className="text-gray-600 mb-2">
@@ -917,7 +1124,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">H2-H6 Header Tag Usage</h4>
-                <span className={`text-3xl font-bold ${safeReport.headings.h2Count > 0 ? "text-green-500" : "text-red-500"}`}>{safeReport.headings.h2Count > 0 ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["h2", "h3", "h4", "h5", "h6", "header tag"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["h2", "h3", "h4", "h5", "h6", "header tag"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600 mb-4">
                 {safeReport.headings.h2Count > 0 
@@ -957,7 +1164,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Image Alt Attributes</h4>
-                <span className={`text-3xl font-bold ${safeReport.images.withoutAlt === 0 ? "text-green-500" : "text-red-500"}`}>{safeReport.images.withoutAlt === 0 ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["image alt", "alt attribute", "alt text"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["image alt", "alt attribute", "alt text"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600 mb-2">
                 {safeReport.images.withoutAlt === 0
@@ -978,7 +1185,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">SSL Enabled</h4>
-                <span className={`text-3xl font-bold ${safeReport.technicalSEO.hasSSL ? "text-green-500" : "text-red-500"}`}>{safeReport.technicalSEO.hasSSL ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["ssl", "https", "secure"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["ssl", "https", "secure"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600">
                 {safeReport.technicalSEO.hasSSL 
@@ -991,7 +1198,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Robots.txt</h4>
-                <span className={`text-3xl font-bold ${safeReport.technicalSEO.hasRobotsTxt ? "text-green-500" : "text-red-500"}`}>{safeReport.technicalSEO.hasRobotsTxt ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["robots.txt", "robots"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["robots.txt", "robots"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600 mb-2">
                 {safeReport.technicalSEO.hasRobotsTxt 
@@ -1011,7 +1218,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">XML Sitemaps</h4>
-                <span className={`text-3xl font-bold ${safeReport.technicalSEO.hasSitemap ? "text-green-500" : "text-red-500"}`}>{safeReport.technicalSEO.hasSitemap ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["sitemap", "xml sitemap"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["sitemap", "xml sitemap"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600 mb-2">
                 {safeReport.technicalSEO.hasSitemap 
@@ -1034,7 +1241,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Analytics</h4>
-                <span className={`text-3xl font-bold ${safeReport.technicalSEO.hasAnalytics ? "text-green-500" : "text-red-500"}`}>{safeReport.technicalSEO.hasAnalytics ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["analytics", "google analytics"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["analytics", "google analytics"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600 mb-2">
                 {safeReport.technicalSEO.hasAnalytics 
@@ -1052,7 +1259,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Schema.org Structured Data</h4>
-                <span className={`text-3xl font-bold ${safeReport.technicalSEO.hasJsonLd ? "text-green-500" : "text-red-500"}`}>{safeReport.technicalSEO.hasJsonLd ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["schema", "structured data", "json-ld"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["schema", "structured data", "json-ld"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600">
                 {safeReport.technicalSEO.hasJsonLd 
@@ -1065,7 +1272,7 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Identity Schema</h4>
-                <span className={`text-3xl font-bold ${safeReport.technicalSEO.hasIdentitySchema ? "text-green-500" : "text-red-500"}`}>{safeReport.technicalSEO.hasIdentitySchema ? "✓" : "✗"}</span>
+                <span className={`text-3xl font-bold ${!hasRecommendationFor(["identity schema", "organization schema", "person schema"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["identity schema", "organization schema", "person schema"]) ? "✓" : "✗"}</span>
               </div>
               <p className="text-gray-600 mb-2">
                 {safeReport.technicalSEO.hasIdentitySchema 
@@ -1117,16 +1324,29 @@ export default function ReportViewPage() {
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className={`text-5xl font-bold ${safeReport.social.score === 0 ? "text-gray-400" : getScoreColor(safeReport.social.score)}`}>
-                  {safeReport.social.score}
+                  <EditableScore
+                    score={safeReport.social.score}
+                    onSave={(newScore) => updateReportField(["social", "score"], newScore)}
+                    className="inline-block"
+                  />
                 </div>
               </div>
             </div>
             <div className="flex-1">
               <h3 className="text-2xl font-semibold text-gray-900 mb-3">
-                {safeReport.social.message}
+                <EditableField
+                  value={safeReport.social.message}
+                  onSave={(newValue) => updateReportField(["social", "message"], newValue)}
+                  displayClassName="text-2xl font-semibold text-gray-900"
+                />
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                {safeReport.social.description}
+                <EditableField
+                  value={safeReport.social.description}
+                  onSave={(newValue) => updateReportField(["social", "description"], newValue)}
+                  multiline={true}
+                  displayClassName="text-gray-600 leading-relaxed"
+                />
               </p>
             </div>
           </div>
@@ -1153,8 +1373,8 @@ export default function ReportViewPage() {
                   </a>
                 )}
               </div>
-              <span className={`text-3xl font-bold ${safeReport.social.hasFacebookPage ? "text-green-500" : "text-red-500"}`}>
-                {safeReport.social.hasFacebookPage ? "✓" : "✗"}
+              <span className={`text-3xl font-bold ${!hasRecommendationFor(["facebook", "facebook page"]) ? "text-green-500" : "text-red-500"}`}>
+                {!hasRecommendationFor(["facebook", "facebook page"]) ? "✓" : "✗"}
               </span>
             </div>
 
@@ -1178,8 +1398,8 @@ export default function ReportViewPage() {
                   </a>
                 )}
               </div>
-              <span className={`text-3xl font-bold ${safeReport.social.hasInstagram ? "text-green-500" : "text-red-500"}`}>
-                {safeReport.social.hasInstagram ? "✓" : "✗"}
+              <span className={`text-3xl font-bold ${!hasRecommendationFor(["instagram", "instagram account"]) ? "text-green-500" : "text-red-500"}`}>
+                {!hasRecommendationFor(["instagram", "instagram account"]) ? "✓" : "✗"}
               </span>
             </div>
           </div>
@@ -1247,8 +1467,8 @@ export default function ReportViewPage() {
                   </div>
                 )}
               </div>
-              <span className={`text-3xl font-bold ${(safeReport.localSEO.hasPhone && safeReport.localSEO.hasAddress) ? "text-green-500" : "text-red-500"}`}>
-                {(safeReport.localSEO.hasPhone && safeReport.localSEO.hasAddress) ? "✓" : "✗"}
+              <span className={`text-3xl font-bold ${!hasRecommendationFor(["address", "phone", "contact"]) ? "text-green-500" : "text-red-500"}`}>
+                {!hasRecommendationFor(["address", "phone", "contact"]) ? "✓" : "✗"}
               </span>
             </div>
 
@@ -1262,8 +1482,8 @@ export default function ReportViewPage() {
                     : "No Local Business Schema identified on the page."}
                 </p>
               </div>
-              <span className={`text-3xl font-bold ${safeReport.localSEO.hasLocalBusinessSchema ? "text-green-500" : "text-red-500"}`}>
-                {safeReport.localSEO.hasLocalBusinessSchema ? "✓" : "✗"}
+              <span className={`text-3xl font-bold ${!hasRecommendationFor(["local business schema", "local schema"]) ? "text-green-500" : "text-red-500"}`}>
+                {!hasRecommendationFor(["local business schema", "local schema"]) ? "✓" : "✗"}
               </span>
             </div>
           </div>
