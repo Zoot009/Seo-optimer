@@ -124,6 +124,9 @@ interface ReportData {
     category: string;
     priority: string;
   }>;
+  manualChecks?: {
+    [key: string]: boolean; // true = checkmark, false = cross mark
+  };
 }
 
 export default function ReportViewPage() {
@@ -592,6 +595,201 @@ export default function ReportViewPage() {
     );
   };
 
+  // Toggle manual check status for a section
+  const toggleManualCheck = (sectionKey: string) => {
+    if (!report) return;
+    
+    const currentManualChecks = report.manualChecks || {};
+    const currentValue = currentManualChecks[sectionKey];
+    
+    // Toggle: undefined -> true -> false -> undefined (cycle through states)
+    let newValue: boolean | undefined;
+    if (currentValue === undefined) {
+      newValue = true; // Set to checkmark
+    } else if (currentValue === true) {
+      newValue = false; // Set to cross mark
+    } else {
+      newValue = undefined; // Remove override, use auto logic
+    }
+    
+    const newManualChecks = { ...currentManualChecks };
+    if (newValue === undefined) {
+      delete newManualChecks[sectionKey];
+    } else {
+      newManualChecks[sectionKey] = newValue;
+    }
+    
+    updateReportField(["manualChecks"], newManualChecks);
+  };
+
+  // Get the check status (true = checkmark, false = cross mark)
+  const getCheckStatus = (sectionKey: string, keywords: string[]): boolean => {
+    if (!report) return true;
+    
+    // Check if there's a manual override first
+    if (report.manualChecks && report.manualChecks[sectionKey] !== undefined) {
+      return report.manualChecks[sectionKey];
+    }
+    
+    // Fall back to recommendation-based logic
+    return !hasRecommendationFor(keywords);
+  };
+
+  // Get indicator for manual override state
+  const getManualOverrideIndicator = (sectionKey: string): string => {
+    if (!report || !report.manualChecks || report.manualChecks[sectionKey] === undefined) {
+      return ""; // No manual override
+    }
+    return " 🔒"; // Manual override active
+  };
+
+  // Render clickable checkmark/cross mark
+  const renderCheckMark = (sectionKey: string, keywords: string[]) => {
+    const isChecked = getCheckStatus(sectionKey, keywords);
+    const hasManualOverride = report?.manualChecks?.[sectionKey] !== undefined;
+    
+    return (
+      <span
+        className={`text-3xl font-bold cursor-pointer hover:scale-110 transition-transform select-none ${
+          isChecked ? "text-green-500" : "text-red-500"
+        } ${hasManualOverride ? "opacity-100" : ""}`}
+        onClick={() => toggleManualCheck(sectionKey)}
+        title={
+          hasManualOverride
+            ? `Manual override active (${isChecked ? "✓" : "✗"}). Click to cycle: ✓ → ✗ → Auto`
+            : "Click to manually set. Cycles: Auto → ✓ → ✗ → Auto"
+        }
+      >
+        {isChecked ? "✓" : "✗"}
+      </span>
+    );
+  };
+
+  // Check if section has manual override
+  const hasManualOverride = (sectionKey: string): boolean => {
+    return report?.manualChecks?.[sectionKey] !== undefined;
+  };
+
+  // Dynamic content generators based on checkmark status
+  const getTitleTagContent = () => {
+    const isChecked = getCheckStatus("titleTag", ["title tag", "title"]);
+    if (isChecked) {
+      return safeReport.metaTags.titleLength >= 50 && safeReport.metaTags.titleLength <= 60
+        ? "You have a Title Tag of optimal length (between 50 and 60 characters)."
+        : safeReport.metaTags.titleLength < 50
+        ? "You have a Title Tag, but ideally it should be lengthened to between 50 and 60 characters (including spaces)."
+        : "You have a Title Tag, but ideally it should be shortened to between 50 and 60 characters (including spaces).";
+    }
+    return "Your page does not have a Title Tag.";
+  };
+
+  const getMetaDescriptionContent = () => {
+    const isChecked = getCheckStatus("metaDescription", ["meta description", "description tag"]);
+    if (isChecked) {
+      return safeReport.metaTags.descriptionLength >= 120 && safeReport.metaTags.descriptionLength <= 160
+        ? "You have a Meta Description Tag of optimal length (between 120 and 160 characters)."
+        : safeReport.metaTags.descriptionLength < 120
+        ? "Your page has a Meta Description Tag however, your Meta Description should ideally be lengthened to between 120 and 160 characters (including spaces)."
+        : "Your page has a Meta Description Tag however, your Meta Description should ideally be shortened to between 120 and 160 characters (including spaces).";
+    }
+    return "Your page does not have a Meta Description Tag.";
+  };
+
+  const getH1HeaderContent = () => {
+    const isChecked = getCheckStatus("h1Header", ["h1", "h1 tag", "h1 header"]);
+    if (isChecked) {
+      return safeReport.headings.h1Count === 1
+        ? "Your page has a H1 Tag."
+        : "Your page has more than one H1 Tag. It is generally recommended to only use one H1 Tag on a page.";
+    }
+    return "Your page is missing an H1 Tag.";
+  };
+
+  const getH2H6HeaderContent = () => {
+    const isChecked = getCheckStatus("h2h6Headers", ["h2", "h3", "h4", "h5", "h6", "header tag"]);
+    return isChecked
+      ? "Your page is making use of multiple levels of Header Tags (which is good)."
+      : "Your page should use multiple levels of Header Tags, such as H2 and H3.";
+  };
+
+  const getImageAltContent = () => {
+    const isChecked = getCheckStatus("imageAlt", ["image alt", "alt attribute", "alt text"]);
+    return isChecked
+      ? "You do not have any images missing Alt Attributes on your page."
+      : "You have images on your page that are missing Alt Attributes.";
+  };
+
+  const getSSLContent = () => {
+    const isChecked = getCheckStatus("ssl", ["ssl", "https", "secure"]);
+    return isChecked
+      ? "Your website has SSL enabled."
+      : "Your website does not have SSL enabled.";
+  };
+
+  const getRobotsTxtContent = () => {
+    const isChecked = getCheckStatus("robotsTxt", ["robots.txt", "robots"]);
+    return isChecked
+      ? "Your website appears to have a robots.txt file."
+      : "Your website does not appear to have a robots.txt file.";
+  };
+
+  const getSitemapContent = () => {
+    const isChecked = getCheckStatus("sitemap", ["sitemap", "xml sitemap"]);
+    return isChecked
+      ? "Your website appears to have an XML Sitemap."
+      : "Your website does not appear to have an XML Sitemap.";
+  };
+
+  const getAnalyticsContent = () => {
+    const isChecked = getCheckStatus("analytics", ["analytics", "google analytics"]);
+    return isChecked
+      ? "We detected an analytics tool installed on your page."
+      : "We could not detect an analytics tool installed on your page.";
+  };
+
+  const getSchemaContent = () => {
+    const isChecked = getCheckStatus("schema", ["schema", "structured data", "json-ld"]);
+    return isChecked
+      ? "You are using JSON-LD Schema on your page."
+      : "Your page is not using JSON-LD Schema.";
+  };
+
+  const getIdentitySchemaContent = () => {
+    const isChecked = getCheckStatus("identitySchema", ["identity schema", "organization schema", "person schema"]);
+    return isChecked
+      ? "Organization or Person Schema identified on the page."
+      : "No Organization or Person Schema identified on the page.";
+  };
+
+  const getFacebookContent = () => {
+    const isChecked = getCheckStatus("facebook", ["facebook", "facebook page"]);
+    return isChecked
+      ? "We found a linked Facebook Page on your website."
+      : "We did not detect a Facebook Page linked to your website.";
+  };
+
+  const getInstagramContent = () => {
+    const isChecked = getCheckStatus("instagram", ["instagram", "instagram account"]);
+    return isChecked
+      ? "We found a linked Instagram account on your website."
+      : "We did not detect an Instagram account linked to your website.";
+  };
+
+  const getAddressPhoneContent = () => {
+    const isChecked = getCheckStatus("addressPhone", ["address", "phone", "contact"]);
+    if (isChecked) {
+      return "We detected both an address and phone number on your website.";
+    }
+    return "We did not detect an address or phone number on your website.";
+  };
+
+  const getLocalBusinessSchemaContent = () => {
+    const isChecked = getCheckStatus("localBusinessSchema", ["local business schema", "local schema"]);
+    return isChecked
+      ? "LocalBusiness Schema was found on your website."
+      : "We could not find LocalBusiness Schema on your website.";
+  };
+
   const radius = 80;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (safeReport.score / 100) * circumference;
@@ -664,9 +862,14 @@ export default function ReportViewPage() {
             </svg>
           </div>
           <div className="flex-1">
-            <p className="text-sm text-blue-800">
+            <p className="text-sm text-blue-800 mb-2">
               <span className="font-semibold">Edit Mode Enabled:</span> Double-click on any score, title, description, or text field to edit it. 
               Click the <span className="font-semibold">"Save Changes"</span> button when you're done editing.
+            </p>
+            <p className="text-sm text-blue-700">
+              <span className="font-semibold">Manual Checkmarks:</span> Click any checkmark (✓) or cross mark (✗) to toggle its status. 
+              Click multiple times to cycle: Auto → ✓ → ✗ → Auto. 
+              Manual overrides are shown with 🔒.
             </p>
           </div>
         </div>
@@ -1032,17 +1235,14 @@ export default function ReportViewPage() {
             {/* Title Tag */}
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold text-gray-900 text-lg">Title Tag</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["title tag", "title"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["title tag", "title"]) ? "✓" : "✗"}</span>
+                <h4 className="font-semibold text-gray-900 text-lg">
+                  Title Tag
+                  {hasManualOverride("titleTag") && <span className="ml-2 text-xs text-gray-500" title="Manual override active">🔒</span>}
+                </h4>
+                {renderCheckMark("titleTag", ["title tag", "title"])}
               </div>
               <p className="text-gray-600 mb-3">
-                {!safeReport.metaTags.hasTitle
-                  ? "Your page does not have a Title Tag."
-                  : safeReport.metaTags.titleLength >= 50 && safeReport.metaTags.titleLength <= 60
-                  ? "You have a Title Tag of optimal length (between 50 and 60 characters)."
-                  : safeReport.metaTags.titleLength < 50
-                  ? "You have a Title Tag, but ideally it should be lengthened to between 50 and 60 characters (including spaces)."
-                  : "You have a Title Tag, but ideally it should be shortened to between 50 and 60 characters (including spaces)."}
+                {getTitleTagContent()}
               </p>
               {safeReport.title && (
                 <div className="bg-gray-50 p-4 rounded mb-3">
@@ -1067,17 +1267,14 @@ export default function ReportViewPage() {
             {/* Meta Description */}
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold text-gray-900 text-lg">Meta Description Tag</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["meta description", "description tag"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["meta description", "description tag"]) ? "✓" : "✗"}</span>
+                <h4 className="font-semibold text-gray-900 text-lg">
+                  Meta Description Tag
+                  {hasManualOverride("metaDescription") && <span className="ml-2 text-xs text-gray-500" title="Manual override active">🔒</span>}
+                </h4>
+                {renderCheckMark("metaDescription", ["meta description", "description tag"])}
               </div>
               <p className="text-gray-600 mb-3">
-                {!safeReport.metaTags.hasDescription
-                  ? "Your page does not have a Meta Description Tag."
-                  : safeReport.metaTags.descriptionLength >= 120 && safeReport.metaTags.descriptionLength <= 160
-                  ? "You have a Meta Description Tag of optimal length (between 120 and 160 characters)."
-                  : safeReport.metaTags.descriptionLength < 120
-                  ? "Your page has a Meta Description Tag however, your Meta Description should ideally be lengthened to between 120 and 160 characters (including spaces)."
-                  : "Your page has a Meta Description Tag however, your Meta Description should ideally be shortened to between 120 and 160 characters (including spaces)."}
+                {getMetaDescriptionContent()}
               </p>
               {safeReport.description && (
                 <div className="bg-gray-50 p-4 rounded mb-3">
@@ -1103,17 +1300,14 @@ export default function ReportViewPage() {
             {/* H1 Header */}
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
-                <h4 className="font-semibold text-gray-900 text-lg">H1 Header Tag Usage</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["h1", "h1 tag", "h1 header"]) ? "text-green-500" : "text-red-500"}`}>
-                  {!hasRecommendationFor(["h1", "h1 tag", "h1 header"]) ? "✓" : "✗"}
-                </span>
+                <h4 className="font-semibold text-gray-900 text-lg">
+                  H1 Header Tag Usage
+                  {hasManualOverride("h1Header") && <span className="ml-2 text-xs text-gray-500" title="Manual override active">🔒</span>}
+                </h4>
+                {renderCheckMark("h1Header", ["h1", "h1 tag", "h1 header"])}
               </div>
               <p className="text-gray-600 mb-2">
-                {safeReport.headings.h1Count === 0
-                  ? "Your page is missing an H1 Tag."
-                  : safeReport.headings.h1Count === 1
-                  ? "Your page has a H1 Tag."
-                  : "Your page has more than one H1 Tag. It is generally recommended to only use one H1 Tag on a page."}
+                {getH1HeaderContent()}
               </p>
               <p className="text-gray-500 text-sm">
                 The H1 Header Tag is an important way of signaling to search engines what your content is about, and subsequently the keywords it should rank for.
@@ -1124,12 +1318,10 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">H2-H6 Header Tag Usage</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["h2", "h3", "h4", "h5", "h6", "header tag"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["h2", "h3", "h4", "h5", "h6", "header tag"]) ? "✓" : "✗"}</span>
+                {renderCheckMark("h2h6Headers", ["h2", "h3", "h4", "h5", "h6", "header tag"])}
               </div>
               <p className="text-gray-600 mb-4">
-                {safeReport.headings.h2Count > 0 
-                  ? "Your page is making use of multiple levels of Header Tags (which is good)." 
-                  : "Your page should use multiple levels of Header Tags, such as H2 and H3."}
+                {getH2H6HeaderContent()}
               </p>
               <p className="text-gray-500 text-sm mb-4">
                 When HTML Heading Tags are used properly, they help search engines better understand the structure and context of your web page.
@@ -1164,12 +1356,10 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Image Alt Attributes</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["image alt", "alt attribute", "alt text"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["image alt", "alt attribute", "alt text"]) ? "✓" : "✗"}</span>
+                {renderCheckMark("imageAlt", ["image alt", "alt attribute", "alt text"])}
               </div>
               <p className="text-gray-600 mb-2">
-                {safeReport.images.withoutAlt === 0
-                  ? "You do not have any images missing Alt Attributes on your page."
-                  : "You have images on your page that are missing Alt Attributes."}
+                {getImageAltContent()}
               </p>
               {safeReport.images.total > 0 && (
                 <p className="text-gray-600 mb-3">
@@ -1185,12 +1375,10 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">SSL Enabled</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["ssl", "https", "secure"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["ssl", "https", "secure"]) ? "✓" : "✗"}</span>
+                {renderCheckMark("ssl", ["ssl", "https", "secure"])}
               </div>
               <p className="text-gray-600">
-                {safeReport.technicalSEO.hasSSL 
-                  ? "Your website has SSL enabled." 
-                  : "Your website does not have SSL enabled."}
+                {getSSLContent()}
               </p>
             </div>
 
@@ -1198,12 +1386,10 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Robots.txt</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["robots.txt", "robots"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["robots.txt", "robots"]) ? "✓" : "✗"}</span>
+                {renderCheckMark("robotsTxt", ["robots.txt", "robots"])}
               </div>
               <p className="text-gray-600 mb-2">
-                {safeReport.technicalSEO.hasRobotsTxt 
-                  ? "Your website appears to have a robots.txt file." 
-                  : "Your website does not appear to have a robots.txt file."}
+                {getRobotsTxtContent()}
               </p>
               {safeReport.technicalSEO.robotsTxtUrl && (
                 <div className="bg-gray-50 p-3 rounded">
@@ -1218,12 +1404,10 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">XML Sitemaps</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["sitemap", "xml sitemap"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["sitemap", "xml sitemap"]) ? "✓" : "✗"}</span>
+                {renderCheckMark("sitemap", ["sitemap", "xml sitemap"])}
               </div>
               <p className="text-gray-600 mb-2">
-                {safeReport.technicalSEO.hasSitemap 
-                  ? "Your website appears to have an XML Sitemap." 
-                  : "Your website does not appear to have an XML Sitemap."}
+                {getSitemapContent()}
               </p>
               {safeReport.technicalSEO.sitemapUrl && (
                 <div className="bg-gray-50 p-3 rounded mb-2">
@@ -1232,7 +1416,7 @@ export default function ReportViewPage() {
                   </a>
                 </div>
               )}
-              {safeReport.technicalSEO.hasSitemap && (
+              {getCheckStatus("sitemap", ["sitemap", "xml sitemap"]) && (
                 <p className="text-gray-500 text-sm">More Sitemaps were found, but not tested.</p>
               )}
             </div>
@@ -1241,14 +1425,12 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Analytics</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["analytics", "google analytics"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["analytics", "google analytics"]) ? "✓" : "✗"}</span>
+                {renderCheckMark("analytics", ["analytics", "google analytics"])}
               </div>
               <p className="text-gray-600 mb-2">
-                {safeReport.technicalSEO.hasAnalytics 
-                  ? "We detected an analytics tool installed on your page." 
-                  : "We could not detect an analytics tool installed on your page."}
+                {getAnalyticsContent()}
               </p>
-              {!safeReport.technicalSEO.hasAnalytics && (
+              {!getCheckStatus("analytics", ["analytics", "google analytics"]) && (
                 <p className="text-gray-600 text-sm">
                   Website analytics tools like Google Analytics assist you in measuring, analyzing and ultimately improving traffic to your page.
                 </p>
@@ -1259,12 +1441,10 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Schema.org Structured Data</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["schema", "structured data", "json-ld"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["schema", "structured data", "json-ld"]) ? "✓" : "✗"}</span>
+                {renderCheckMark("schema", ["schema", "structured data", "json-ld"])}
               </div>
               <p className="text-gray-600">
-                {safeReport.technicalSEO.hasJsonLd 
-                  ? "You are using JSON-LD Schema on your page." 
-                  : "Your page is not using JSON-LD Schema."}
+                {getSchemaContent()}
               </p>
             </div>
 
@@ -1272,21 +1452,21 @@ export default function ReportViewPage() {
             <div className="border-b border-gray-200 pb-6">
               <div className="flex items-start justify-between mb-2">
                 <h4 className="font-semibold text-gray-900 text-lg">Identity Schema</h4>
-                <span className={`text-3xl font-bold ${!hasRecommendationFor(["identity schema", "organization schema", "person schema"]) ? "text-green-500" : "text-red-500"}`}>{!hasRecommendationFor(["identity schema", "organization schema", "person schema"]) ? "✓" : "✗"}</span>
+                {renderCheckMark("identitySchema", ["identity schema", "organization schema", "person schema"])}
               </div>
               <p className="text-gray-600 mb-2">
-                {safeReport.technicalSEO.hasIdentitySchema 
-                  ? "Organization or Person Schema identified on the page." 
-                  : "No Organization or Person Schema identified on the page."}
+                {getIdentitySchemaContent()}
               </p>
               {safeReport.technicalSEO.identityType && (
                 <div className="bg-gray-50 p-3 rounded mb-3">
                   <p className="text-gray-700"><span className="font-medium">{safeReport.technicalSEO.identityType}</span></p>
                 </div>
               )}
-              <p className="text-gray-600 text-sm">
-                The absence of Organization or Person Schema can make it harder for Search Engines and LLMs to identify the ownership of a website and confidently answer brand, company or person queries.
-              </p>
+              {!getCheckStatus("identitySchema", ["identity schema", "organization schema", "person schema"]) && (
+                <p className="text-gray-600 text-sm">
+                  The absence of Organization or Person Schema can make it harder for Search Engines and LLMs to identify the ownership of a website and confidently answer brand, company or person queries.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1358,11 +1538,9 @@ export default function ReportViewPage() {
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 mb-1">Facebook Page Linked</h4>
                 <p className="text-gray-600 text-sm">
-                  {safeReport.social.hasFacebookPage 
-                    ? "We found a linked Facebook Page on your website." 
-                    : "We did not detect a Facebook Page linked to your website."}
+                  {getFacebookContent()}
                 </p>
-                {!safeReport.social.hasFacebookPage && (
+                {!getCheckStatus("facebook", ["facebook", "facebook page"]) && (
                   <p className="text-gray-500 text-sm mt-2">
                     Facebook is one of the top social media platforms and linking your business page helps strengthen your online presence.
                   </p>
@@ -1373,9 +1551,7 @@ export default function ReportViewPage() {
                   </a>
                 )}
               </div>
-              <span className={`text-3xl font-bold ${!hasRecommendationFor(["facebook", "facebook page"]) ? "text-green-500" : "text-red-500"}`}>
-                {!hasRecommendationFor(["facebook", "facebook page"]) ? "✓" : "✗"}
-              </span>
+              {renderCheckMark("facebook", ["facebook", "facebook page"])}
             </div>
 
             {/* Instagram Linked */}
@@ -1383,11 +1559,9 @@ export default function ReportViewPage() {
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 mb-1">Instagram Linked</h4>
                 <p className="text-gray-600 text-sm">
-                  {safeReport.social.hasInstagram 
-                    ? "We found a linked Instagram account on your website." 
-                    : "We did not detect an Instagram account linked to your website."}
+                  {getInstagramContent()}
                 </p>
-                {!safeReport.social.hasInstagram && (
+                {!getCheckStatus("instagram", ["instagram", "instagram account"]) && (
                   <p className="text-gray-500 text-sm mt-2">
                     Instagram is a highly visual platform that can help showcase your brand and engage with customers.
                   </p>
@@ -1398,9 +1572,7 @@ export default function ReportViewPage() {
                   </a>
                 )}
               </div>
-              <span className={`text-3xl font-bold ${!hasRecommendationFor(["instagram", "instagram account"]) ? "text-green-500" : "text-red-500"}`}>
-                {!hasRecommendationFor(["instagram", "instagram account"]) ? "✓" : "✗"}
-              </span>
+              {renderCheckMark("instagram", ["instagram", "instagram account"])}
             </div>
           </div>
         </div>
@@ -1418,13 +1590,7 @@ export default function ReportViewPage() {
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 mb-1">Address & Phone Shown on Website</h4>
                 <p className="text-gray-600 text-sm mb-2">
-                  {(safeReport.localSEO.hasPhone && safeReport.localSEO.hasAddress)
-                    ? "We detected both an address and phone number on your website."
-                    : safeReport.localSEO.hasPhone && !safeReport.localSEO.hasAddress
-                    ? "We detected a phone number, but no address was found on your website."
-                    : !safeReport.localSEO.hasPhone && safeReport.localSEO.hasAddress
-                    ? "We detected an address, but no phone number was found on your website."
-                    : "We did not detect an address or phone number on your website."}
+                  {getAddressPhoneContent()}
                 </p>
                 <p className="text-gray-500 text-sm mb-3">
                   Displaying your business address and phone number prominently helps build trust with visitors and is important for local SEO.
@@ -1467,9 +1633,7 @@ export default function ReportViewPage() {
                   </div>
                 )}
               </div>
-              <span className={`text-3xl font-bold ${!hasRecommendationFor(["address", "phone", "contact"]) ? "text-green-500" : "text-red-500"}`}>
-                {!hasRecommendationFor(["address", "phone", "contact"]) ? "✓" : "✗"}
-              </span>
+              {renderCheckMark("addressPhone", ["address", "phone", "contact"])}
             </div>
 
             {/* Local Business Schema */}
@@ -1477,14 +1641,10 @@ export default function ReportViewPage() {
               <div className="flex-1">
                 <h4 className="font-semibold text-gray-900 mb-1">Local Business Schema</h4>
                 <p className="text-gray-600 text-sm">
-                  {safeReport.localSEO.hasLocalBusinessSchema 
-                    ? "Local Business Schema identified on the page." 
-                    : "No Local Business Schema identified on the page."}
+                  {getLocalBusinessSchemaContent()}
                 </p>
               </div>
-              <span className={`text-3xl font-bold ${!hasRecommendationFor(["local business schema", "local schema"]) ? "text-green-500" : "text-red-500"}`}>
-                {!hasRecommendationFor(["local business schema", "local schema"]) ? "✓" : "✗"}
-              </span>
+              {renderCheckMark("localBusinessSchema", ["local business schema", "local schema"])}
             </div>
           </div>
         </div>
